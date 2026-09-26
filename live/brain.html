@@ -3,106 +3,186 @@
 <head>
 <meta charset="utf-8">
 <title>FlyMario Live — Brain</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link rel="stylesheet" href="style.css">
 <style>
-  .stage{ background: var(--panel); border: 1px solid var(--line); border-radius: 10px; aspect-ratio: 5/3; }
+  .stage{
+    position: relative; background: radial-gradient(120% 140% at 30% 20%, #131a24 0%, var(--panel) 60%, #0a0d12 100%);
+    border: 1px solid var(--line); border-radius: 10px; aspect-ratio: 4/3; cursor: grab;
+  }
   .stage canvas{ display:block; width:100%; height:100%; }
-  .mbon{ display:flex; gap:10px; }
-  .mbon .col{ flex:1; }
-  .mbon .label{ font-size:0.68rem; color:var(--ink-dim); margin-bottom:4px; }
+  .hint{
+    position:absolute; bottom:8px; left:0; right:0; text-align:center;
+    font-size: 0.62rem; color: var(--ink-dim); pointer-events:none;
+  }
+  .credit{ font-size: 0.62rem; color: var(--ink-dim); text-align:right; margin-top:2px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>FlyMario Live — <span>Brain</span></h1>
-  <div class="tabnav">
-    <a href="game.html">Game</a>
-    <a href="fly.html">Fly</a>
-    <a class="active" href="brain.html">Brain</a>
+  <div class="topbar">
+    <span class="wordmark">flymario · live</span>
+    <div class="tabnav">
+      <a href="game.html">Game</a>
+      <a href="fly.html">Fly</a>
+      <a class="active" href="brain.html">Brain</a>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>Kenyon cell activity — 200 units, live</h2>
-    <div class="stage"><canvas id="cv"></canvas></div>
-    <div class="row" style="margin-top:8px;"><span>active this instant</span><b id="statKC">0</b> / 200</div>
+  <div class="panel" style="padding:0; overflow:hidden;">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="hint">drag to rotate · scroll to zoom</div>
+    </div>
   </div>
+  <div class="credit">real 3D reconstruction, VirtualFlyBrain JFRC2 template (CC BY 4.0) · right optic lobe (medulla + lobula) highlighted — the actual visual motion-processing circuitry</div>
 
   <div class="panel">
     <h2>Mushroom body output (MBON balance)</h2>
-    <div class="mbon">
-      <div class="col">
-        <div class="label">approach</div>
-        <div class="bar" style="height:10px;"><i id="approachFill" style="background:var(--good)"></i></div>
-        <div class="row"><span></span><b id="statApproach">0.00</b></div>
-      </div>
-      <div class="col">
-        <div class="label">avoid</div>
-        <div class="bar" style="height:10px;"><i id="avoidFill" style="background:var(--bad)"></i></div>
-        <div class="row"><span></span><b id="statAvoid">0.00</b></div>
-      </div>
-    </div>
-    <p style="font-size:0.72rem;color:var(--ink-dim);line-height:1.5;margin:10px 0 0;">
-      value V(s) = approach − avoid. Every Kenyon cell above synapses onto
-      both compartments; dopamine (learning/dopamine.py) depresses the
-      active ones' synapses in whichever compartment the current reward
-      prediction error selects, exactly as in the toy-conditioning test
-      that validates this rule (tests/toy_conditioning.py).
+    <div class="row"><span>approach</span><b id="statApproach">0.00</b></div>
+    <div class="bar"><i id="approachFill" style="background:var(--good)"></i></div>
+    <div class="row" style="margin-top:8px;"><span>avoid</span><b id="statAvoid">0.00</b></div>
+    <div class="bar"><i id="avoidFill" style="background:var(--bad)"></i></div>
+    <div class="row" style="margin-top:8px;"><span>active Kenyon cells</span><b id="statKC">0</b> / 200</div>
+  </div>
+
+  <div class="panel">
+    <h2>Why the optic lobe</h2>
+    <p style="font-size:0.76rem;color:var(--ink-dim);line-height:1.55;margin:0;">
+      Pong is a real-time visual motion-tracking task. The <b style="color:var(--ink)">medulla</b>
+      and <b style="color:var(--ink)">lobula</b> — highlighted here — are where the fly's actual
+      T4/T5 motion-detection circuits live; this project's own KC/MBON
+      readout (glowing above) doesn't sit at a real 3D position in this
+      mesh yet, since that needs FlyWire's own coordinate data. See
+      docs/PONG.md and docs/STATUS.md.
     </p>
   </div>
 </div>
 
 <script>
-const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-function resize(){
-  const rect = cv.parentElement.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio||1, 2);
-  cv.width = rect.width*dpr; cv.height = rect.height*dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  draw(lastActivity);
-}
-window.addEventListener('resize', resize);
+(function(){
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
 
-let lastActivity = new Array(200).fill(0);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 100);
+  const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 
-function draw(activity){
-  const rect = cv.parentElement.getBoundingClientRect();
-  const w = rect.width, h = rect.height;
-  ctx.fillStyle = '#0a0d12';
-  ctx.fillRect(0,0,w,h);
+  scene.add(new THREE.AmbientLight(0x8899bb, 0.9));
+  const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(2,3,4); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x5577ff, 0.4); rim.position.set(-3,-2,-3); scene.add(rim);
 
-  const cols = 20, rows = 10;
-  const cw = w/cols, ch = h/rows;
-  const maxV = Math.max(...activity, 0.5);
-  for(let i=0;i<activity.length;i++){
-    const r = Math.floor(i/cols), c = i%cols;
-    const v = Math.max(0, Math.min(activity[i]/maxV, 1));
-    if(v < 0.02){
-      ctx.fillStyle = '#171c26';
-    } else {
-      // amber glow scaled by activity
-      const alpha = 0.15 + v*0.85;
-      ctx.fillStyle = `rgba(245,185,66,${alpha.toFixed(2)})`;
-    }
-    ctx.fillRect(c*cw+1, r*ch+1, cw-2, ch-2);
+  function buildGeometry(meshData){
+    const geo = new THREE.BufferGeometry();
+    const verts = new Float32Array(meshData.vertices.length*3);
+    meshData.vertices.forEach((v,i)=>{ verts[i*3]=v[0]; verts[i*3+1]=v[1]; verts[i*3+2]=v[2]; });
+    const idx = new Uint32Array(meshData.faces.length*3);
+    meshData.faces.forEach((f,i)=>{ idx[i*3]=f[0]; idx[i*3+1]=f[1]; idx[i*3+2]=f[2]; });
+    geo.setAttribute('position', new THREE.BufferAttribute(verts,3));
+    geo.setIndex(new THREE.BufferAttribute(idx,1));
+    geo.computeVertexNormals();
+    return geo;
   }
-}
-resize();
 
-function poll(){
-  fetch('state.json').then(r=>r.json()).then(s=>{
-    lastActivity = s.kc_activity;
-    draw(lastActivity);
-    document.getElementById('statKC').textContent = s.kc_active;
-    document.getElementById('statApproach').textContent = s.approach.toFixed(2);
-    document.getElementById('statAvoid').textContent = s.avoid.toFixed(2);
-    const maxMbon = Math.max(s.approach, s.avoid, 1);
-    document.getElementById('approachFill').style.width = (s.approach/maxMbon*100).toFixed(0)+'%';
-    document.getElementById('avoidFill').style.width = (s.avoid/maxMbon*100).toFixed(0)+'%';
-  }).catch(()=>{});
-}
-setInterval(poll, 100);
-poll();
+  let visualMat, visualMesh;
+  function initMeshes(data){
+    const shellGeo = buildGeometry(data.whole_brain);
+    const shellMat = new THREE.MeshPhongMaterial({
+      color: 0x3a4a63, transparent: true, opacity: 0.14,
+      side: THREE.DoubleSide, depthWrite: false, shininess: 20,
+    });
+    scene.add(new THREE.Mesh(shellGeo, shellMat));
+    scene.add(new THREE.LineSegments(
+      new THREE.WireframeGeometry(shellGeo),
+      new THREE.LineBasicMaterial({ color: 0x3a4a63, transparent:true, opacity:0.18 })
+    ));
+
+    const visualGeo = buildGeometry(data.visual_lobe);
+    visualMat = new THREE.MeshPhongMaterial({
+      color: 0x4fd9c7, emissive: 0x4fd9c7, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.85, shininess: 40,
+    });
+    visualMesh = new THREE.Mesh(visualGeo, visualMat);
+    scene.add(visualMesh);
+  }
+
+  let radius = 3.2, theta = 0.5, phi = 1.15;
+  let dragging = false, lastX=0, lastY=0;
+  function updateCamera(){
+    camera.position.set(
+      radius*Math.sin(phi)*Math.cos(theta),
+      radius*Math.cos(phi),
+      radius*Math.sin(phi)*Math.sin(theta)
+    );
+    camera.lookAt(0,0,0);
+  }
+  stage.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+  window.addEventListener('mouseup', ()=> dragging=false);
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+    theta -= dx*0.006; phi = Math.min(Math.max(phi-dy*0.006,0.15), Math.PI-0.15);
+    updateCamera();
+  });
+  stage.addEventListener('touchstart', e=>{ const t=e.touches[0]; dragging=true; lastX=t.clientX; lastY=t.clientY; }, {passive:true});
+  window.addEventListener('touchend', ()=> dragging=false);
+  window.addEventListener('touchmove', e=>{
+    if(!dragging) return;
+    const t=e.touches[0]; const dx=t.clientX-lastX, dy=t.clientY-lastY; lastX=t.clientX; lastY=t.clientY;
+    theta -= dx*0.006; phi = Math.min(Math.max(phi-dy*0.006,0.15), Math.PI-0.15);
+    updateCamera();
+  }, {passive:true});
+  stage.addEventListener('wheel', e=>{
+    e.preventDefault();
+    radius = Math.min(Math.max(radius + e.deltaY*0.0025, 1.2), 8);
+    updateCamera();
+  }, {passive:false});
+
+  function resize(){
+    const rect = stage.getBoundingClientRect();
+    renderer.setSize(rect.width, rect.height, false);
+    camera.aspect = rect.width/Math.max(rect.height,1);
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  updateCamera(); resize();
+
+  let latestKcActive = 0;
+  function render(){
+    if(visualMat){
+      const norm = Math.min(latestKcActive/200, 1);
+      visualMat.emissiveIntensity = 0.3 + norm*1.2;
+      const s = 1 + norm*0.015;
+      visualMesh.scale.set(s,s,s);
+    }
+    renderer.render(scene, camera);
+    requestAnimationFrame(render);
+  }
+
+  fetch('assets/brain_mesh.json').then(r=>r.json()).then(data=>{
+    initMeshes(data);
+    requestAnimationFrame(render);
+  }).catch(err=>{
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#e7ebf2'; ctx.font='12px monospace';
+    ctx.fillText('Could not load brain mesh: ' + err, 10, 20);
+  });
+
+  function poll(){
+    fetch('state.json').then(r=>r.json()).then(s=>{
+      latestKcActive = s.kc_active;
+      document.getElementById('statKC').textContent = s.kc_active;
+      document.getElementById('statApproach').textContent = s.approach.toFixed(2);
+      document.getElementById('statAvoid').textContent = s.avoid.toFixed(2);
+      const maxMbon = Math.max(s.approach, s.avoid, 1);
+      document.getElementById('approachFill').style.width = (s.approach/maxMbon*100).toFixed(0)+'%';
+      document.getElementById('avoidFill').style.width = (s.avoid/maxMbon*100).toFixed(0)+'%';
+    }).catch(()=>{});
+  }
+  setInterval(poll, 150);
+  poll();
+})();
 </script>
 </body>
 </html>

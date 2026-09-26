@@ -43,14 +43,21 @@ SHIU_FILES = {
 
 # Public, CC BY 4.0 adult Drosophila brain domain meshes (JFRC2 template
 # space) from VirtualFlyBrain/DrosAdultBRAINdomains -- used by
-# analysis/build_brain_mesh.py for the 3D visualization (viz/brain3d.html).
-# Domain index 49 = "GNG" (adult gnathal ganglion, the modern name for the
-# subesophageal zone), looked up from that repo's
-# refData/Original_Index.tsv. Domain index 0 is the whole-brain outline.
+# analysis/build_brain_mesh.py (viz/brain3d.html) and live/build_assets.py
+# (live/brain.html). Domain indices, looked up from that repo's
+# refData/Original_Index.tsv:
+#   0  = whole-brain outline
+#   49 = GNG (adult gnathal ganglion, the modern name for the subesophageal
+#        zone) -- highlighted for the sugar-feeding demo
+#   25 = ME_R (right medulla), 3 = LO_R (right lobula) -- together the
+#        optic lobe's visual motion-processing circuitry, highlighted for
+#        the Pong demo (see docs/PONG.md for why this region specifically)
 BRAIN_MESH_REPO_RAW = "https://raw.githubusercontent.com/VirtualFlyBrain/DrosAdultBRAINdomains/master"
 BRAIN_MESH_FILES = {
     "whole_brain.obj": f"{BRAIN_MESH_REPO_RAW}/individualDomainFiles/AdultBrainDomain0000.obj",
     "gng.obj": f"{BRAIN_MESH_REPO_RAW}/individualDomainFiles/AdultBrainDomain0049.obj",
+    "medulla_R.obj": f"{BRAIN_MESH_REPO_RAW}/individualDomainFiles/AdultBrainDomain0025.obj",
+    "lobula_R.obj": f"{BRAIN_MESH_REPO_RAW}/individualDomainFiles/AdultBrainDomain0003.obj",
 }
 
 FLYWIRE_CODEX_URL = "https://codex.flywire.ai/api/download"

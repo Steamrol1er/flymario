@@ -1,19 +1,23 @@
 """Thin wrapper around the real Atari Pong environment (`ale-py`), used
-as-is: the real rendered game frame for display, the same 128-byte RAM
-observation the network reads, and the same 6-action controller interface
-the actual game exposes -- nothing re-derived or renamed. See
-docs/PONG.md for why this game, how the ROM was obtained, what was
-researched, and what was found along the way.
+as-is: the same 128-byte RAM observation the network reads and the same
+6-action controller interface the actual game exposes -- nothing
+re-derived or renamed. See docs/PONG.md for why this game, how the ROM
+was obtained, what was researched, and what was found along the way.
 
 Native interface (unchanged from `gymnasium.make("ALE/Pong-v5", ...)`):
     action:  Discrete(6)  -- NOOP, FIRE, RIGHT, LEFT, RIGHTFIRE, LEFTFIRE
     reward:  +1 (you score), -1 (opponent scores), 0 otherwise
     ram:     uint8[128]   -- the raw Atari 2600 RAM, fed to the KC
                              projection directly, unmodified
-    frame:   uint8[210,160,3] -- the actual emulator screen, RGB, exactly
-                             what a person playing the real game would see
-                             (this is what earlier viz pages got wrong by
-                             hand-drawing an approximation instead)
+
+Defaults to `obs_type="ram"` (no per-step RGB rendering cost) since the
+live demo (live/game.html) draws its own crisp vector reconstruction from
+RAM-derived paddle/ball positions rather than the emulator's raw pixel
+frame -- that switch is also what fixed the live view's stutter (encoding
+and transferring a re-rendered PNG over HTTP on every simulation step was
+the actual bottleneck, not the emulator). Pass `render_rgb=True` if you
+specifically want the real emulator frame too (e.g. to capture a
+screenshot for documentation, as in `live/assets/sample_frame.png`).
 
 `difficulty=0` (ALE's default, kept explicit here) is empirically the
 HARDEST of the 4 available settings, not the easiest: a fixed random
@@ -43,8 +47,10 @@ RAM_ENEMY_Y = 54    # inferred by elimination, not independently confirmed
 
 
 class PongEnv:
-    def __init__(self, frame_skip: int = 1, difficulty: int = 0):
-        self.env = gym.make("ALE/Pong-v5", obs_type="rgb", frameskip=frame_skip, difficulty=difficulty)
+    def __init__(self, frame_skip: int = 1, difficulty: int = 0, render_rgb: bool = False):
+        obs_type = "rgb" if render_rgb else "ram"
+        self.render_rgb = render_rgb
+        self.env = gym.make("ALE/Pong-v5", obs_type=obs_type, frameskip=frame_skip, difficulty=difficulty)
         assert self.env.action_space.n == N_ACTIONS
         assert list(self.env.unwrapped.get_action_meanings()) == ACTION_MEANINGS
 
@@ -52,21 +58,22 @@ class PongEnv:
         return self.env.unwrapped.ale.getRAM()
 
     def reset(self):
-        frame, info = self.env.reset()
-        ram = self._ram()
-        return ram, self._augment_info(info, ram, frame)
+        obs, info = self.env.reset()
+        ram = obs if not self.render_rgb else self._ram()
+        return ram, self._augment_info(info, ram, obs if self.render_rgb else None)
 
     def step(self, action_index: int):
-        frame, reward, terminated, truncated, info = self.env.step(action_index)
+        obs, reward, terminated, truncated, info = self.env.step(action_index)
         done = terminated or truncated
-        ram = self._ram()
-        info = self._augment_info(info, ram, frame)
+        ram = obs if not self.render_rgb else self._ram()
+        info = self._augment_info(info, ram, obs if self.render_rgb else None)
         return ram, info, float(reward), done
 
     def _augment_info(self, info: dict, ram, frame) -> dict:
         info = dict(info)
         info["ram"] = ram
-        info["frame"] = frame  # real emulator RGB pixels, for display only
+        if frame is not None:
+            info["frame"] = frame  # real emulator RGB pixels, only when render_rgb=True
         info["player_y"] = int(ram[RAM_PLAYER_Y])
         info["ball_y"] = int(ram[RAM_BALL_Y])
         info["ball_x"] = int(ram[RAM_BALL_X])

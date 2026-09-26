@@ -4,29 +4,30 @@ by run_live_demo.py (project root) -- game, fly parameters, brain
 activity. No Claude Artifact involved; this runs entirely on your own
 machine, e.g. started from a VS Code terminal.
 
-Architecture (stdlib only, no new dependencies beyond what's already in
-requirements.txt -- Pillow, which torch/matplotlib already pull in, is
-used to encode the live frame as PNG):
+Architecture (stdlib only, no new dependencies):
   - a background thread runs the real game + agent loop forever, one
     Pong point per "episode", updating a thread-safe shared State
   - a stdlib http.server.ThreadingHTTPServer serves:
       GET  /                -> game.html
-      GET  /game.html, /fly.html, /brain.html, /style.css
-      GET  /state.json      -> current agent/game state (poll this)
-      GET  /frame.png       -> the real emulator frame, as PNG
+      GET  /game.html, /fly.html, /brain.html, /style.css, /assets/*
+      GET  /state.json      -> current agent/game state (poll this;
+                                includes real RAM-derived paddle/ball
+                                positions -- game.html draws its own crisp
+                                vector reconstruction from these instead of
+                                fetching a re-encoded frame image, which is
+                                what fixed this view's earlier stutter)
       POST /speed           -> {"speed": float} playback speed multiplier
       POST /pause           -> {"paused": bool}
-  - the three HTML pages each poll /state.json (and game.html also polls
-    /frame.png) on a timer; no websockets needed at this update rate
+  - the three HTML pages poll /state.json on a timer; no websockets needed
+    at this update rate
 
 See docs/PONG.md for the full account of the Pong experiment this reuses
-(research, RAM addresses, the two stability fixes). This file adds: real
-emulator graphics (not hand-drawn), continuous live play+learning instead
-of a precomputed replay, a speed control, and the three-tab layout.
+(research, RAM addresses, the two stability fixes). This file adds:
+continuous live play+learning instead of a precomputed replay, a speed
+control, and the three-tab layout.
 """
 from __future__ import annotations
 
-import io
 import json
 import threading
 import time
@@ -34,7 +35,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 
 import sys
 ROOT = Path(__file__).resolve().parent.parent
@@ -78,9 +78,9 @@ class SharedState:
     know about torch."""
     def __init__(self, n_kc: int):
         self.lock = threading.Lock()
-        self.frame_png: bytes = b""
         self.episode = 0
         self.step = 0
+        self.server_time = 0.0     # time.time() at last update, for client-side interpolation
         self.action = "NOOP"
         self.value = 0.0
         self.dopamine_delta = 0.0
@@ -95,19 +95,20 @@ class SharedState:
         self.points_scored = 0
         self.speed = 1.0
         self.paused = False
+        # real RAM-derived game positions, for the client's own vector
+        # rendering (see live/game.html) -- rendering client-side from tiny
+        # position data instead of fetching a re-encoded PNG every step is
+        # what actually fixed this view's stutter; encoding+transferring an
+        # image over HTTP on every single simulation step was the bottleneck.
+        self.player_y = 0
+        self.ball_x = 0
+        self.ball_y = 0
+        self.enemy_y = 0
 
     def snapshot_json(self) -> bytes:
         with self.lock:
-            d = {k: v for k, v in self.__dict__.items() if k not in ("lock", "frame_png")}
+            d = {k: v for k, v in self.__dict__.items() if k != "lock"}
         return json.dumps(d).encode("utf-8")
-
-
-def encode_frame(frame: np.ndarray) -> bytes:
-    # ALE frames are 210x160; upscale 3x for a crisper, still-small PNG
-    img = Image.fromarray(frame).resize((480, 630), Image.NEAREST)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 def simulation_loop(state: SharedState, stop_event: threading.Event):
@@ -147,9 +148,9 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
 
             mbon = ac.critic.mbon_output(kc)
             with state.lock:
-                state.frame_png = encode_frame(info["frame"])
                 state.episode = ep
                 state.step = step
+                state.server_time = time.time()
                 state.action = ACTION_MEANINGS[action]
                 state.value = round(value, 3)
                 state.dopamine_delta = round(float(delta), 3)
@@ -158,6 +159,10 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
                 state.approach = round(float(mbon["approach"]), 3)
                 state.avoid = round(float(mbon["avoid"]), 3)
                 state.epsilon = round(epsilon, 3)
+                state.player_y = info["player_y"]
+                state.ball_x = info["ball_x"]
+                state.ball_y = info["ball_y"]
+                state.enemy_y = info["enemy_y"]
                 if reward > 0:
                     state.score_player += 1
                     state.points_scored += 1
@@ -193,6 +198,12 @@ class Handler(BaseHTTPRequestHandler):
     def _send_json(self, obj):
         self._send_bytes(json.dumps(obj).encode("utf-8"), "application/json")
 
+    CONTENT_TYPES = {
+        ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
+        ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
+        ".svg": "image/svg+xml",
+    }
+
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/":
@@ -200,17 +211,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/state.json":
             self._send_bytes(self.state.snapshot_json(), "application/json")
             return
-        if path == "/frame.png":
-            with self.state.lock:
-                data = self.state.frame_png
-            self._send_bytes(data or b"", "image/png")
-            return
-        # static files from live/
-        fname = path.lstrip("/")
-        fpath = self.live_dir / fname
-        if fpath.exists() and fpath.is_file() and fpath.parent == self.live_dir:
-            ctype = "text/html" if fpath.suffix == ".html" else \
-                    "text/css" if fpath.suffix == ".css" else "application/javascript"
+        # static files from live/ (and one level of subdirectory, e.g.
+        # live/assets/brain_mesh.json), with a path-traversal check
+        fpath = (self.live_dir / path.lstrip("/")).resolve()
+        if fpath.exists() and fpath.is_file() and self.live_dir in fpath.parents:
+            ctype = self.CONTENT_TYPES.get(fpath.suffix, "application/octet-stream")
             self._send_bytes(fpath.read_bytes(), ctype, cache=True)
             return
         self.send_response(404)

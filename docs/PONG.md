@@ -196,26 +196,51 @@ new dependencies) that runs the real game and the real agent continuously
 in a background thread, point after point, learning as it goes — and
 opens three browser tabs, each polling that one live process:
 
-- **`live/game.html`** — the actual emulator screen (`env.step()`'s real
-  RGB frame, encoded to PNG each step — not redrawn shapes), the live
-  score, and a speed control (0.1x to 4x) so you can slow the whole
-  simulation down to actually watch the ball and the fly's reactions, or
-  speed it up to let more points play out. A pause button freezes it
-  entirely (verified: `step` in `/state.json` stops advancing while
-  paused).
-- **`live/fly.html`** — the agent's own state: which of the 6 real actions
-  it's taking right now (with a small animated figure pressing the
-  corresponding up/down control), the mushroom body's value estimate
-  V(s), the dopamine (reward-prediction-error) signal, exploration rate,
-  and the running score rate.
-- **`live/brain.html`** — a live 200-cell heatmap of Kenyon-cell activity
-  (one cell per grid square, brightness = activation), plus the
-  approach/avoid MBON balance that V(s) is computed from.
+- **`live/game.html`** — a crisp vector recreation of the classic Pong
+  screen (black background, white paddles/ball, dashed centre line, RESET
+  / MAIN MENU buttons), drawn client-side each animation frame from the
+  real RAM-derived paddle/ball positions in `/state.json`, with
+  exponential smoothing between polls. **This replaced an earlier version
+  that fetched a freshly PNG-encoded copy of the emulator's raw RGB frame
+  over HTTP on every simulation step** — that was the actual cause of the
+  visible stutter, not the browser or the network: encoding a 210x160
+  image and round-tripping it through the server on every single step is
+  real, avoidable overhead once the same information (paddle/ball
+  positions) is a few small numbers already sitting in RAM. `env/pong_env.py`
+  now defaults to `obs_type="ram"` (no per-step image rendering at all)
+  for exactly this reason; pass `render_rgb=True` if you specifically want
+  the real emulator frame for something else (e.g. capturing a reference
+  screenshot). A speed control (0.1x–4x) and pause (button or the `P` key)
+  let you slow the whole simulation down to actually watch the ball and
+  the fly's reactions.
+- **`live/fly.html`** — a hand-built SVG fly model (translucent blue
+  "x-ray" wireframe: segmented abdomen, thorax, compound eye, antenna, one
+  wing, six jointed legs in a standing pose), one front leg animating to
+  press the up/down control matching the real action taken, and a cluster
+  of glowing colored blobs over the head whose brightness tracks live
+  Kenyon-cell activity — labeled explicitly as a schematic stand-in for
+  "the brain is active," not a real 3D neuron placement (that's what
+  `live/brain.html` is for). The model and its build reasoning are
+  self-contained in the file; the design was checked against real
+  *Drosophila* body-plan anatomy first (head/thorax/abdomen, one wing pair
+  + halteres, three leg pairs) rather than drawn freehand.
+- **`live/brain.html`** — a REAL 3D reconstruction of the adult fly brain
+  (`live/build_assets.py` processes the same public VirtualFlyBrain JFRC2
+  template meshes used in the earlier Claude-Artifact brain visualization),
+  rendered in three.js, rotatable and zoomable, with the **right optic
+  lobe (medulla + lobula)** highlighted and pulsing with live Kenyon-cell
+  activity — not the gnathal ganglion used for the earlier sugar-feeding
+  demo. That choice isn't arbitrary: for a real-time visual
+  motion-tracking task, the medulla and lobula are where the fly's actual
+  T4/T5 motion-detection circuits live (see the citations earlier in this
+  file). This page needs one CDN script (three.js from cdnjs) and so needs
+  internet on first load; `game.html` and `fly.html` stay fully
+  offline-capable.
 
-All three pages are plain HTML/CSS/JS with **no external CDN or font
-dependencies** — everything needed lives under `live/`, so this works
-fully offline. `live/assets/sample_frame.png` is a real captured frame
-(not a mockup) kept as a static reference image.
+`live/assets/sample_frame.png` (a real captured emulator frame, not a
+mockup) and `live/assets/brain_mesh.json` (the preprocessed 3D mesh data)
+are the "necessary images/assets" kept alongside the code rather than
+fetched at runtime.
 
 Stop the demo with Ctrl+C in the terminal that's running
 `run_live_demo.py` — closing the browser tabs alone leaves the server (and

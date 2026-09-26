@@ -3,6 +3,7 @@ data/
 analysis/*.npz
 analysis/*.json
 analysis/*.pt
+live/assets/brain_mesh.json
 __pycache__/
 *.pyc
 .venv/

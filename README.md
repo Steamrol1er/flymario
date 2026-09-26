@@ -160,19 +160,28 @@ reward — watched live, not replayed from a precomputed file. Full account
 (research, bugs found and fixed, honest result) in **`docs/PONG.md`**.
 
 ```bash
+python -m connectome.download --source brain-mesh --dest data/   # one-time
+python live/build_assets.py                                       # one-time
 python run_live_demo.py
 ```
 
 Opens three browser tabs against one local server that's actually running
-the real emulator and the real agent right now: **Game** (the real
-rendered frame, live score, a 0.1x–4x speed control and pause so you can
-slow it down enough to watch the ball and the fly's reactions frame by
-frame), **Fly** (which action it's taking, the mushroom body's value
-estimate, the dopamine signal, exploration rate, running score rate), and
-**Brain** (a live 200-cell Kenyon-cell activity heatmap and the
-approach/avoid MBON balance). Everything under `live/` is self-contained —
-no external fonts or CDN scripts, works offline. Stop with Ctrl+C in the
-terminal running it.
+the real emulator and the real agent right now:
+
+- **Game** — a smooth vector recreation of the classic Pong screen (RESET /
+  MAIN MENU, dashed centre line, the works), drawn from the real RAM-derived
+  paddle/ball positions with a 0.1x–4x speed control and pause (button or
+  the `P` key) so you can actually watch the ball and the fly's reactions.
+- **Fly** — a hand-built anatomical fly model (translucent "x-ray" style)
+  with a leg pressing the real up/down control, plus its live value
+  estimate, dopamine signal, exploration rate, and running score rate.
+- **Brain** — a REAL 3D reconstruction of the fly brain (rotate/zoom), with
+  the right optic lobe (medulla + lobula — the actual visual
+  motion-detection circuitry) highlighted and pulsing with live activity.
+
+`game.html`/`fly.html` are fully offline-capable (no CDN dependencies);
+`brain.html` loads three.js from a CDN for its 3D view, so needs internet
+on first load. Stop the demo with Ctrl+C in the terminal running it.
 
 `difficulty=0` (kept explicit in `env/pong_env.py`, not just the default)
 is empirically the hardest of Pong's 4 built-in settings — a random policy
