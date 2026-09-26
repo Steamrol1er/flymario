@@ -55,13 +55,51 @@ QUICK_TARGET_STEPS = 100_000        # ~400 episodes at this task's typical episo
 MAX_STEPS = 1200                    # a single Pong point rarely takes longer than this
 
 
+N_FRAME_STACK = 2  # see FrameStack docstring for why this exists
+
+
+class FrameStack:
+    """Concatenates the last N_FRAME_STACK raw RAM frames before they reach
+    RamToKC.
+
+    A single RAM frame gives the network positions only -- player_y,
+    ball_x, ball_y, enemy_y -- with no way to tell which direction the
+    ball is moving. That's a genuine information deficiency, not a tuning
+    problem: standard Atari RL (the original DQN included) always stacks
+    multiple consecutive frames for exactly this reason, since velocity
+    matters as much as position for a real-time tracking task. This does
+    the same thing at the RAM level instead of the pixel level, and
+    changes nothing about the "native interface" principle in this file's
+    module docstring -- it's still literally the game's own raw RAM,
+    unmodified, just several consecutive readings of it instead of one,
+    the same way DQN's frame stack is still literally the game's own
+    pixels. It is NOT the same thing as hand-picking which of the 128
+    bytes matter (see docs/STATUS.md for that trade-off, deliberately not
+    taken here) -- the network still sees all 128 bytes, at each of the
+    stacked timesteps, and has to find the useful ones itself.
+    """
+    def __init__(self, n_frames: int = N_FRAME_STACK):
+        self.n_frames = n_frames
+        self.frames: list[np.ndarray] = []
+
+    def reset(self, first_ram: np.ndarray) -> np.ndarray:
+        self.frames = [first_ram.copy() for _ in range(self.n_frames)]
+        return np.concatenate(self.frames)
+
+    def push(self, ram: np.ndarray) -> np.ndarray:
+        self.frames.append(ram.copy())
+        self.frames.pop(0)
+        return np.concatenate(self.frames)
+
+
 class RamToKC:
-    """Fixed random projection from the raw 128-byte RAM (normalized to
-    [0,1]) to KC space, WITH divisive normalization on the output -- the
-    fix from the FlappyBird run (docs/STATUS.md): without it, unbounded
-    KC activation magnitude destabilizes the mushroom body's linear value
-    estimate and saturates the actor's weights within the first few dozen
-    episodes, before it can learn anything state-dependent.
+    """Fixed random projection from the (possibly frame-stacked) raw RAM,
+    normalized to [0,1], to KC space, WITH divisive normalization on the
+    output -- the fix from the FlappyBird run (docs/STATUS.md): without
+    it, unbounded KC activation magnitude destabilizes the mushroom
+    body's linear value estimate and saturates the actor's weights within
+    the first few dozen episodes, before it can learn anything
+    state-dependent.
     """
     def __init__(self, n_in: int, n_kc: int, seed: int = 0, target_total: float = 4.0):
         rng = np.random.default_rng(seed)
@@ -77,7 +115,8 @@ class RamToKC:
 
 def run_episode(env, ac, ram_to_kc, epsilon, record=False):
     obs, info = env.reset()
-    kc = ram_to_kc(obs)
+    stack = FrameStack()
+    kc = ram_to_kc(stack.reset(obs))
 
     trace = []
     total_reward = 0.0
@@ -85,7 +124,7 @@ def run_episode(env, ac, ram_to_kc, epsilon, record=False):
         action, probs = ac.act(kc, epsilon=epsilon)
         value = float(ac.critic.value(kc))
         obs, info, reward, done = env.step(action)
-        kc_next = ram_to_kc(obs)
+        kc_next = ram_to_kc(stack.push(obs))
         delta = ac.learn(reward, kc_next, done=done)
         total_reward += reward
 
@@ -145,7 +184,7 @@ def main():
             normalize_advantage=True,  # the fix from docs/STATUS.md's FlappyBird finding
         ),
     )
-    ram_to_kc = RamToKC(n_in=128, n_kc=n_kc)
+    ram_to_kc = RamToKC(n_in=128 * N_FRAME_STACK, n_kc=n_kc)
     env = PongEnv()
 
     print(f"Target: {target_steps:,} environment steps "

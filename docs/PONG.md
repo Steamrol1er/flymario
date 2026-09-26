@@ -207,6 +207,41 @@ reliably win at a real-time tracking task, is closer to an open problem
 than a solved one, and this project's simple actor-critic hits that limit
 regardless of how many episodes it's given.
 
+### Frame stacking: a real, if modest, improvement
+
+A single RAM frame gives the network ball/paddle *positions* only, with no
+way to tell which direction the ball is moving -- a genuine information
+deficiency for a motion-tracking task, not a tuning problem. Standard
+Atari RL (DQN included) always stacks multiple consecutive frames for
+exactly this reason. `experiments/train_pong.py::FrameStack` and
+`live/server.py`'s copy of it now concatenate the last 2 raw RAM frames
+before they reach the KC projection -- still literally the game's own raw
+RAM, unmodified, just more of it (the same principle as DQN's own frame
+stack), not the same thing as hand-picking which of the 128 bytes matter.
+
+Re-ran the identical 2,000,000-step comparison with this change:
+
+| | Without frame stack | With frame stack |
+|---|---|---|
+| Overall score rate | 1.89% (140/7,402) | **2.56% (188/7,339)** |
+| First ~1,500 episodes | 0% exactly (fully frozen) | 1.13% (slow, but never pinned at exactly 0%) |
+| Back half | 2.41% | **2.93%** |
+
+A real, measurable improvement, and the early freeze was less complete
+(never stuck at literally 0% the way the unstacked run was) -- consistent
+with the network now having a genuinely useful signal it lacked before,
+not just noise. **Still below the ~5% random-policy baseline overall.**
+Giving the network velocity information helped; it did not resolve the
+underlying credit-assignment limitation described above. Other candidates
+that were considered but not (yet) tried, ranked by expected value: a
+proper policy-gradient update (replacing the current ad hoc
+`eligibility * delta` rule with the real log-probability gradient), a real
+experience replay buffer with batched updates, and -- flagged explicitly
+because it trades away the "no hand-crafted features" principle this file
+otherwise holds to -- hand-selecting the handful of RAM bytes that
+actually matter instead of feeding the random projection all 128 (mostly
+irrelevant: score digits, timers, etc.) at once.
+
 ## Live local demo (not a precomputed replay)
 
 The first version of this (`viz/pong_play.html`) was a Claude Artifact

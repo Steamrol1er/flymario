@@ -63,6 +63,25 @@ BASE_DELAY_S = 1.0 / 20.0   # "speed 1.0" ~= 20 simulated steps/sec (slower
                             # than real Atari's 60fps on purpose, so it's
                             # actually watchable without slowing it down)
 MIN_SPEED, MAX_SPEED = 0.05, 4.0
+N_FRAME_STACK = 2  # see experiments/train_pong.py's FrameStack docstring
+
+
+class FrameStack:
+    """Same fix as experiments/train_pong.py's FrameStack -- a single RAM
+    frame has no velocity information, only position; kept as an
+    independent copy here for the same standalone reason as RamToKC below."""
+    def __init__(self, n_frames: int = N_FRAME_STACK):
+        self.n_frames = n_frames
+        self.frames: list = []
+
+    def reset(self, first_ram):
+        self.frames = [first_ram.copy() for _ in range(self.n_frames)]
+        return np.concatenate(self.frames)
+
+    def push(self, ram):
+        self.frames.append(ram.copy())
+        self.frames.pop(0)
+        return np.concatenate(self.frames)
 
 
 class RamToKC:
@@ -151,14 +170,15 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
             w_min=-3.0, w_max=3.0, normalize_advantage=True,
         ),
     )
-    ram_to_kc = RamToKC(n_in=128, n_kc=n_kc)
+    ram_to_kc = RamToKC(n_in=128 * N_FRAME_STACK, n_kc=n_kc)
     env = PongEnv(render_rgb=True)  # real emulator pixels, for /stream.mjpg
 
     MAX_STEPS_PER_POINT = 1200
     ep = 0
     while not stop_event.is_set():
         ram, info = env.reset()
-        kc = ram_to_kc(ram)
+        stack = FrameStack()
+        kc = ram_to_kc(stack.reset(ram))
         step = 0
         for step in range(MAX_STEPS_PER_POINT):
             while state.paused and not stop_event.is_set():
@@ -170,7 +190,7 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
             action, probs = ac.act(kc, epsilon=epsilon)
             value = float(ac.critic.value(kc))
             ram, info, reward, done = env.step(action)
-            kc_next = ram_to_kc(ram)
+            kc_next = ram_to_kc(stack.push(ram))
             delta = ac.learn(reward, kc_next, done=done)
 
             mbon = ac.critic.mbon_output(kc)

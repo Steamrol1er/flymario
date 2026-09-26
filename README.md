@@ -202,8 +202,15 @@ different scales:
   1-6% of points — but **140/7,402 overall (1.89%) is below both the
   shorter run and the random baseline**. Training 20x longer did not
   produce a better result here, and the extended frozen phase made the
-  aggregate worse. That's a real, reported finding, not glossed over — see
-  `docs/PONG.md` for the full account of why.
+  aggregate worse.
+- **Same 2,000,000 steps, with frame stacking added** (network sees the
+  last 2 raw RAM frames, not 1 — it previously had no way to tell which
+  direction the ball was moving): **188/7,339 (2.56%)**, a real
+  improvement over the un-stacked run, and the early freeze was less
+  complete (1.13% in the first ~1,500 episodes instead of exactly 0%).
+  Still below the ~5% random baseline. A genuine fix for a real
+  information gap, not a full solution — see `docs/PONG.md` for the full
+  account and what's likely worth trying next.
 
 ## Other game environments
 
