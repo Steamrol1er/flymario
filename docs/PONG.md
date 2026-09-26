@@ -196,23 +196,29 @@ new dependencies) that runs the real game and the real agent continuously
 in a background thread, point after point, learning as it goes — and
 opens three browser tabs, each polling that one live process:
 
-- **`live/game.html`** — a crisp vector recreation of the classic Pong
-  screen (black background, white paddles/ball, dashed centre line, RESET
-  / MAIN MENU buttons), drawn client-side each animation frame from the
-  real RAM-derived paddle/ball positions in `/state.json`, with
-  exponential smoothing between polls. **This replaced an earlier version
-  that fetched a freshly PNG-encoded copy of the emulator's raw RGB frame
-  over HTTP on every simulation step** — that was the actual cause of the
-  visible stutter, not the browser or the network: encoding a 210x160
-  image and round-tripping it through the server on every single step is
-  real, avoidable overhead once the same information (paddle/ball
-  positions) is a few small numbers already sitting in RAM. `env/pong_env.py`
-  now defaults to `obs_type="ram"` (no per-step image rendering at all)
-  for exactly this reason; pass `render_rgb=True` if you specifically want
-  the real emulator frame for something else (e.g. capturing a reference
-  screenshot). A speed control (0.1x–4x) and pause (button or the `P` key)
-  let you slow the whole simulation down to actually watch the ball and
-  the fly's reactions.
+- **`live/game.html`** — the real emulator screen, live, via
+  `<img src="/stream.mjpg">`. This went through three versions worth
+  recording: (1) the actual RGB frame, but fetched fresh over HTTP as a
+  polled PNG on every simulation step — this was the version with the
+  visible stutter, because each poll is an independent request/response
+  and image decode, so motion looks like a slideshow; (2) a hand-drawn
+  vector recreation of the classic Pong screen (dashed centre line, RESET/
+  MAIN MENU buttons) built from RAM-derived positions to sidestep the
+  encoding cost — smoother, but it stopped being the real game's actual
+  graphics, and the RESET/MAIN MENU buttons didn't do anything (there's
+  nothing to reset to or navigate from in a live simulation), which is
+  worse than just not having them; (3) **the real emulator frame again,
+  but as a proper MJPEG video stream** (`multipart/x-mixed-replace`, the
+  same mechanism old IP cameras use) — one long-lived connection over
+  which the server pushes a new JPEG the moment it's ready, and the
+  browser's own `<img>` tag repaints continuously with no polling and no
+  per-frame request overhead. This is the version kept: real graphics,
+  genuinely smooth, no decorative controls that don't do anything. A speed
+  control (0.1x–4x) and pause (button or the `P` key) still let you slow
+  the whole simulation down to actually watch the ball and the fly's
+  reactions. `env/pong_env.py` defaults to `obs_type="ram"` (no per-step
+  rendering cost) and only switches on rendering (`render_rgb=True`) for
+  the live demo specifically, where the video stream needs it.
 - **`live/fly.html`** — a hand-built SVG fly model (translucent blue
   "x-ray" wireframe: segmented abdomen, thorax, compound eye, antenna, one
   wing, six jointed legs in a standing pose), one front leg animating to

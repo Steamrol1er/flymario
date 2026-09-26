@@ -4,30 +4,42 @@ by run_live_demo.py (project root) -- game, fly parameters, brain
 activity. No Claude Artifact involved; this runs entirely on your own
 machine, e.g. started from a VS Code terminal.
 
-Architecture (stdlib only, no new dependencies):
+Architecture (stdlib only, no new dependencies beyond Pillow, which
+torch/matplotlib already pull in):
   - a background thread runs the real game + agent loop forever, one
     Pong point per "episode", updating a thread-safe shared State
   - a stdlib http.server.ThreadingHTTPServer serves:
       GET  /                -> game.html
       GET  /game.html, /fly.html, /brain.html, /style.css, /assets/*
-      GET  /state.json      -> current agent/game state (poll this;
-                                includes real RAM-derived paddle/ball
-                                positions -- game.html draws its own crisp
-                                vector reconstruction from these instead of
-                                fetching a re-encoded frame image, which is
-                                what fixed this view's earlier stutter)
+      GET  /state.json      -> current agent/game state (poll this)
+      GET  /stream.mjpg     -> the real emulator screen, as a live MJPEG
+                                video stream (see below for why this and
+                                not a polled image)
       POST /speed           -> {"speed": float} playback speed multiplier
       POST /pause           -> {"paused": bool}
-  - the three HTML pages poll /state.json on a timer; no websockets needed
-    at this update rate
+  - the three HTML pages poll /state.json on a timer; game.html's <img>
+    just points its src at /stream.mjpg and the browser handles the rest
+
+On the game view specifically: an earlier version polled a freshly
+PNG-encoded copy of the frame every ~100ms via `img.src =
+'frame.png?t=...'`, which is genuinely choppy -- each poll is a brand new
+HTTP request/response and image decode, so motion looks like a slideshow
+rather than video. This version instead uses MJPEG streaming
+(`multipart/x-mixed-replace`, the same mechanism old IP cameras and
+`mjpg-streamer` use): ONE long-lived HTTP connection over which the server
+pushes a new JPEG frame the moment it's ready, and the browser's own <img>
+tag repaints continuously -- no polling, no per-frame request overhead,
+genuinely smooth. It's plain HTTP, supported natively by every browser,
+and needs no new dependency.
 
 See docs/PONG.md for the full account of the Pong experiment this reuses
-(research, RAM addresses, the two stability fixes). This file adds:
-continuous live play+learning instead of a precomputed replay, a speed
-control, and the three-tab layout.
+(research, RAM addresses, the two stability fixes, and this rendering
+history). This file adds: continuous live play+learning instead of a
+precomputed replay, a speed control, and the three-tab layout.
 """
 from __future__ import annotations
 
+import io
 import json
 import threading
 import time
@@ -35,6 +47,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 import sys
 ROOT = Path(__file__).resolve().parent.parent
@@ -95,11 +108,12 @@ class SharedState:
         self.points_scored = 0
         self.speed = 1.0
         self.paused = False
-        # real RAM-derived game positions, for the client's own vector
-        # rendering (see live/game.html) -- rendering client-side from tiny
-        # position data instead of fetching a re-encoded PNG every step is
-        # what actually fixed this view's stutter; encoding+transferring an
-        # image over HTTP on every single simulation step was the bottleneck.
+        # the real emulator frame, kept as pre-encoded JPEG bytes ready to
+        # push straight into the MJPEG stream (see /stream.mjpg), plus a
+        # version counter so streaming handlers can tell when a genuinely
+        # new frame has arrived instead of re-sending the same one
+        self.frame_jpeg: bytes = b""
+        self.frame_version = 0
         self.player_y = 0
         self.ball_x = 0
         self.ball_y = 0
@@ -107,8 +121,21 @@ class SharedState:
 
     def snapshot_json(self) -> bytes:
         with self.lock:
-            d = {k: v for k, v in self.__dict__.items() if k != "lock"}
+            d = {k: v for k, v in self.__dict__.items() if k not in ("lock", "frame_jpeg")}
         return json.dumps(d).encode("utf-8")
+
+
+def encode_jpeg(frame: np.ndarray, scale: int = 3) -> bytes:
+    # ALE frames are 210x160; a modest integer upscale here (nearest-
+    # neighbor, cheap) keeps the classic blocky Atari look crisp without
+    # doing real interpolation work, then JPEG (not PNG) for a smaller,
+    # faster-to-encode payload -- this runs on every single simulation
+    # step, so its cost matters.
+    h, w = frame.shape[:2]
+    img = Image.fromarray(frame).resize((w * scale, h * scale), Image.NEAREST)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
 
 
 def simulation_loop(state: SharedState, stop_event: threading.Event):
@@ -125,7 +152,7 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
         ),
     )
     ram_to_kc = RamToKC(n_in=128, n_kc=n_kc)
-    env = PongEnv()
+    env = PongEnv(render_rgb=True)  # real emulator pixels, for /stream.mjpg
 
     MAX_STEPS_PER_POINT = 1200
     ep = 0
@@ -147,7 +174,10 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
             delta = ac.learn(reward, kc_next, done=done)
 
             mbon = ac.critic.mbon_output(kc)
+            jpeg_bytes = encode_jpeg(info["frame"])
             with state.lock:
+                state.frame_jpeg = jpeg_bytes
+                state.frame_version += 1
                 state.episode = ep
                 state.step = step
                 state.server_time = time.time()
@@ -198,6 +228,33 @@ class Handler(BaseHTTPRequestHandler):
     def _send_json(self, obj):
         self._send_bytes(json.dumps(obj).encode("utf-8"), "application/json")
 
+    def _stream_mjpeg(self):
+        """multipart/x-mixed-replace MJPEG stream: one long-lived
+        connection, a new part pushed as soon as a new frame is ready.
+        Browsers repaint an <img src="/stream.mjpg"> from this natively --
+        see the module docstring for why this replaced a polled image."""
+        self.send_response(200)
+        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        last_version = -1
+        try:
+            while True:
+                with self.state.lock:
+                    version = self.state.frame_version
+                    frame = self.state.frame_jpeg
+                if frame and version != last_version:
+                    last_version = version
+                    self.wfile.write(b"--frame\r\n")
+                    self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                    self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode())
+                    self.wfile.write(frame)
+                    self.wfile.write(b"\r\n")
+                    self.wfile.flush()
+                time.sleep(0.01)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            pass  # client navigated away or the server is shutting down
+
     CONTENT_TYPES = {
         ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
         ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
@@ -210,6 +267,9 @@ class Handler(BaseHTTPRequestHandler):
             path = "/game.html"
         if path == "/state.json":
             self._send_bytes(self.state.snapshot_json(), "application/json")
+            return
+        if path == "/stream.mjpg":
+            self._stream_mjpeg()
             return
         # static files from live/ (and one level of subdirectory, e.g.
         # live/assets/brain_mesh.json), with a path-traversal check
@@ -258,6 +318,7 @@ def main():
     Handler.state = state
     Handler.live_dir = Path(__file__).resolve().parent
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    server.daemon_threads = True  # so an open /stream.mjpg connection can't block Ctrl+C shutdown
     print(f"FlyMario live Pong demo running at http://127.0.0.1:{PORT}/")
     print("Tabs: /game.html  /fly.html  /brain.html")
     print("Ctrl+C to stop.")

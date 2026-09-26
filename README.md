@@ -168,10 +168,11 @@ python run_live_demo.py
 Opens three browser tabs against one local server that's actually running
 the real emulator and the real agent right now:
 
-- **Game** — a smooth vector recreation of the classic Pong screen (RESET /
-  MAIN MENU, dashed centre line, the works), drawn from the real RAM-derived
-  paddle/ball positions with a 0.1x–4x speed control and pause (button or
-  the `P` key) so you can actually watch the ball and the fly's reactions.
+- **Game** — the real emulator screen, streamed live (MJPEG, not polled
+  images — see `docs/PONG.md` for why that distinction is what actually
+  fixed the earlier stutter), with a 0.1x–4x speed control and pause
+  (button or the `P` key) so you can actually watch the ball and the fly's
+  reactions.
 - **Fly** — a hand-built anatomical fly model (translucent "x-ray" style)
   with a leg pressing the real up/down control, plus its live value
   estimate, dopamine signal, exploration rate, and running score rate.

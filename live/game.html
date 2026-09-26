@@ -6,10 +6,10 @@
 <link rel="stylesheet" href="style.css">
 <style>
   .screen{
-    position: relative; background:#000; border-radius: 4px; border: 1px solid var(--line);
-    width: 100%; max-width: 480px; margin: 0 auto; aspect-ratio: 4/3; overflow:hidden;
+    background:#000; border-radius: 4px; border: 1px solid var(--line);
+    width: 100%; max-width: 480px; margin: 0 auto; overflow:hidden;
   }
-  .screen canvas{ display:block; width:100%; height:100%; }
+  .screen img{ display:block; width:100%; height:auto; image-rendering: pixelated; }
   .transport{ display:flex; align-items:center; gap:10px; max-width:480px; margin:0 auto; width:100%; }
   .speedrow{ display:flex; gap:6px; max-width:480px; margin:0 auto; width:100%; flex-wrap:wrap; justify-content:center; }
   button.pxbtn{
@@ -20,6 +20,8 @@
   button.pxbtn:hover{ background:#fff; color:#000; }
   button.pxbtn.active{ background:#fff; color:#000; }
   .hint{ font-size: 0.68rem; color: var(--ink-dim); text-align:center; }
+  .score{ display:flex; justify-content:space-between; max-width:480px; margin:0 auto; width:100%; font-size:0.85rem; }
+  .score .fly{ color: var(--fly); }
 </style>
 </head>
 <body>
@@ -33,95 +35,28 @@
     </div>
   </div>
 
-  <div class="screen"><canvas id="cv"></canvas></div>
+  <div class="score">
+    <span>enemy <b id="scoreEnemy">0</b></span>
+    <span class="status live" id="liveStatus">connecting</span>
+    <span class="fly">fly <b id="scorePlayer">0</b></span>
+  </div>
+
+  <!-- the real emulator screen, streamed live (MJPEG) -- not redrawn -->
+  <div class="screen"><img id="stream" src="stream.mjpg" alt="live Pong stream"></div>
 
   <div class="transport">
     <button class="pxbtn" id="pauseBtn">Pause</button>
     <span id="pointLabel" style="font-size:0.7rem;color:var(--ink-dim); flex:1; text-align:center;">point 0, step 0</span>
-    <span class="status live" id="liveStatus">connecting</span>
   </div>
 
   <div class="panel">
     <h2>Playback speed — slow it down to watch the fly think</h2>
     <div class="speedrow" id="speedRow"></div>
-    <p class="hint" style="margin-top:8px;">or press P to pause/resume, like the reference Pong UI</p>
+    <p class="hint" style="margin-top:8px;">or press P to pause/resume</p>
   </div>
 </div>
 
 <script>
-const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-
-// --- classic vector Pong renderer, matching the reference look: black
-// screen, white pixel-style paddles/ball/text, dashed centre line ---
-const W = 160, H = 210; // native Atari coordinate space we scale from
-let display = { player_y: 96, ball_x: 80, ball_y: 0, enemy_y: 96 };
-let target  = { player_y: 96, ball_x: 80, ball_y: 0, enemy_y: 96 };
-let paused = false, score = {player:0, enemy:0}, pointLabel = 'point 0, step 0';
-
-function resize(){
-  const rect = cv.parentElement.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio||1, 2);
-  cv.width = rect.width*dpr; cv.height = rect.height*dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-}
-window.addEventListener('resize', resize);
-resize();
-
-function drawScreen(){
-  const rect = cv.parentElement.getBoundingClientRect();
-  const w = rect.width, h = rect.height;
-  const sx = w/W, sy = h/H;
-
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0,0,w,h);
-
-  // top bar: RESET / MAIN MENU, pixel-style boxes
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-  ctx.font = `${Math.max(9,h*0.045)}px monospace`;
-  ctx.textBaseline = 'middle';
-  const barH = h*0.11;
-  ctx.strokeRect(w*0.02, h*0.02, w*0.22, barH*0.8);
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-  ctx.fillText('RESET', w*0.02 + w*0.11, h*0.02 + barH*0.4);
-  ctx.strokeRect(w*0.76, h*0.02, w*0.22, barH*0.8);
-  ctx.fillText('MAIN MENU', w*0.76 + w*0.11, h*0.02 + barH*0.4);
-
-  // dashed centre line
-  ctx.strokeStyle = '#666'; ctx.lineWidth = Math.max(1, w*0.006);
-  ctx.setLineDash([h*0.018, h*0.018]);
-  ctx.beginPath(); ctx.moveTo(w/2, barH*1.3); ctx.lineTo(w/2, h); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // paddles + ball, from interpolated RAM-derived positions
-  const paddleH = 20*sy, paddleW = 3.5*sx;
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(10*sx, display.enemy_y*sy, paddleW, paddleH);
-  ctx.fillRect(w - 14*sx, display.player_y*sy, paddleW, paddleH);
-  ctx.fillRect(display.ball_x*sx, display.ball_y*sy, 3*sx, 4*sy);
-
-  if(paused){
-    ctx.fillStyle = '#fff';
-    ctx.font = `${Math.max(11,h*0.05)}px monospace`;
-    ctx.fillText('HIT P TO PLAY OR PAUSE', w/2, h*0.5);
-  }
-}
-
-function tick(){
-  // exponential smoothing toward the latest known server state -- this
-  // (plus polling at ~30ms instead of fetching a re-encoded image) is what
-  // actually fixed the stutter: the server only updates a few times per
-  // second at slow speeds, but the display still redraws every frame.
-  const k = 0.25;
-  for(const key of ['player_y','ball_x','ball_y','enemy_y']){
-    display[key] += (target[key] - display[key]) * k;
-  }
-  drawScreen();
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
-
-// --- controls ---
 const SPEEDS = [0.1, 0.25, 0.5, 1, 2, 4];
 const speedRow = document.getElementById('speedRow');
 SPEEDS.forEach(s => {
@@ -137,6 +72,7 @@ function setSpeed(s, btn){
   fetch('speed', { method:'POST', body: JSON.stringify({speed: s}) }).catch(()=>{});
 }
 
+let paused = false;
 function setPaused(p){
   paused = p;
   document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
@@ -147,23 +83,23 @@ window.addEventListener('keydown', e => {
   if(e.key === 'p' || e.key === 'P') setPaused(!paused);
 });
 
-// --- polling ---
+// the <img> tag renders the MJPEG stream itself (no JS needed for that);
+// we still poll the small state endpoint for score/labels and to detect
+// a dropped connection (e.g. the server was stopped)
 const liveStatus = document.getElementById('liveStatus');
 let lastOkAt = 0;
 function poll(){
   fetch('state.json').then(r => r.json()).then(s => {
-    target.player_y = s.player_y; target.ball_x = s.ball_x;
-    target.ball_y = s.ball_y; target.enemy_y = s.enemy_y;
-    score.player = s.score_player; score.enemy = s.score_enemy;
-    document.getElementById('pointLabel').textContent =
-      `point ${s.episode}, step ${s.step}  ·  fly ${s.score_player} — ${s.score_enemy} enemy`;
+    document.getElementById('scorePlayer').textContent = s.score_player;
+    document.getElementById('scoreEnemy').textContent = s.score_enemy;
+    document.getElementById('pointLabel').textContent = `point ${s.episode}, step ${s.step}`;
     lastOkAt = Date.now();
     liveStatus.className = 'status live'; liveStatus.textContent = 'live';
   }).catch(()=>{
     if(Date.now() - lastOkAt > 2000){ liveStatus.className='status stale'; liveStatus.textContent='disconnected'; }
   });
 }
-setInterval(poll, 33);
+setInterval(poll, 200);
 poll();
 </script>
 </body>
