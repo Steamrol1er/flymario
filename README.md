@@ -190,12 +190,20 @@ scores 0/15 against it vs. up to 13% at the easiest setting — the closest
 thing to "the perfect bot" this game exposes.
 
 For a one-shot training run instead of the live demo:
-`python -m experiments.train_pong` (writes `analysis/pong_run.json` and a
-checkpoint). Result from one such run: 18/400 points scored (4.5%),
-matching a measured random-policy baseline (~5%) — not skillful play. Real
-run-to-run variance observed: some runs stay dynamic throughout, others
-collapse to a frozen policy partway through, even with identical code and
-hyperparameters — see `docs/PONG.md` for the full, honest account.
+`python -m experiments.train_pong [--target-steps N]` (writes
+`analysis/pong_run.json` and a checkpoint). Two real results, at very
+different scales:
+
+- **100K steps** (400 episodes): 18/400 scored (4.5%), close to the
+  measured ~5% random-policy baseline.
+- **2,000,000 steps** (7,402 episodes, 10.5 min): the policy froze for the
+  first ~22% of episodes (0% score, identical repeated behavior — the same
+  pattern first found on FlappyBird), then broke out and started scoring
+  1-6% of points — but **140/7,402 overall (1.89%) is below both the
+  shorter run and the random baseline**. Training 20x longer did not
+  produce a better result here, and the extended frozen phase made the
+  aggregate worse. That's a real, reported finding, not glossed over — see
+  `docs/PONG.md` for the full account of why.
 
 ## Other game environments
 

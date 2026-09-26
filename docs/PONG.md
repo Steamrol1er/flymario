@@ -150,8 +150,10 @@ reward, independent of these two fixes.
 
 ## Result
 
-400 episodes (one "episode" = one point exchange, ending when either side
-scores or after 1200 steps). Real numbers from `analysis/pong_run.json`:
+### Short run: 400 episodes (100K steps)
+
+One "episode" = one point exchange, ending when either side scores or
+after 1200 steps. Real numbers from an early `analysis/pong_run.json`:
 
 - **18 points scored out of 400 (4.5%)**, roughly matching a **uniform-
   random policy's own baseline (~5%, measured directly)** on this
@@ -160,22 +162,50 @@ scores or after 1200 steps). Real numbers from `analysis/pong_run.json`:
 - First-half vs. second-half score rate: 3.5% → 5.5% — a mild upward trend,
   but with only 18 total scoring events across the whole run this is not a
   statistically confident claim of learning.
-- **Unlike FlappyBird, the policy did not freeze.** Steps-per-point and
-  score outcomes kept varying across the *entire* 400-episode run rather
-  than collapsing to an identical, repeated failure pattern within the
-  first ~50 episodes. That's direct evidence the two fixes above worked as
-  intended — the earlier catastrophic failure mode (immediate weight
-  saturation) did not recur here.
+- The policy did not freeze: steps-per-point and score outcomes kept
+  varying across the *entire* 400-episode run rather than collapsing to an
+  identical, repeated failure pattern within the first ~50 episodes.
 
-**Read this as**: the stability bugs are genuinely fixed, but achieving
-skillful (better-than-random) play from raw RAM with a small, linear,
-non-recurrent readout over a 400-episode budget did not happen. That's
-consistent with the research finding above — even the well-known "fly
-brain plays Doom/Mario 64" demos don't have the fly's own circuit produce
-the policy; they use a separate model for that and route reward events
-through dopamine cells for illustration. Making the dopamine-modulated
-circuit's output *be* the policy, well enough to reliably win at a
-real-time tracking task, is closer to an open problem than a solved one.
+### Long run: 2,000,000 steps (`--target-steps 2000000`)
+
+7,402 episodes, 629 seconds (10.5 minutes) wall clock, 3,179 steps/sec.
+This is a genuinely different, and more nuanced, result than the short
+run -- worth reporting exactly as it happened rather than only the
+flattering part:
+
+- **The policy froze for roughly the first 22% of training** (episodes
+  0-1600, ~400K steps): `avg_steps` pinned at exactly 256.0 and
+  `score_rate` at 0.0% for a long stretch — the same degenerate pattern
+  first diagnosed on FlappyBird (docs/STATUS.md), recurring here at a
+  larger scale despite both fixes being in place from the start. The
+  advantage-normalization and KC-normalization fixes stop weights from
+  saturating in a handful of episodes; they don't guarantee the policy
+  never gets stuck in a bad basin for a while.
+- **It then broke out** and started scoring: score rate fluctuated mostly
+  in the 1-6% range in the back half of training (e.g. 6.0% at episode
+  4194), with `avg_steps` climbing into the 265-290 range (versus the
+  frozen phase's flat 256), i.e. genuinely different, more varied behavior
+  from episode to episode.
+- **Overall: 140 points scored out of 7,402 episodes (1.89%)** — including
+  the frozen phase, this is *below* both the short run's 4.5% and the
+  measured ~5% random baseline. The back half alone (episodes 1600-7402)
+  scores at 2.41% — better than the frozen phase, still below random
+  chance.
+
+**Read this as**: training 20x longer did not produce a better result on
+this metric, and in one concrete way (the extended frozen phase) produced
+a worse one. That's a genuine, informative finding, not a disappointing
+footnote to hide: more data does not fix a credit-assignment problem in
+this simple linear, non-recurrent actor-critic the way it does for a
+proper deep RL setup with a replay buffer and gradient-based updates.
+That's consistent with the research finding earlier in this file — even
+the well-known "fly brain plays Doom/Mario 64" demos don't have the fly's
+own circuit produce the policy; they use a separate model for that and
+route reward events through dopamine cells for illustration. Making the
+dopamine-modulated circuit's output *be* the policy, well enough to
+reliably win at a real-time tracking task, is closer to an open problem
+than a solved one, and this project's simple actor-critic hits that limit
+regardless of how many episodes it's given.
 
 ## Live local demo (not a precomputed replay)
 
