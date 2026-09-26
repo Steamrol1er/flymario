@@ -1,0 +1,12 @@
+data/
+*.parquet
+analysis/*.npz
+analysis/*.json
+analysis/*.pt
+__pycache__/
+*.pyc
+.venv/
+runs/
+results/
+*.log
+.ipynb_checkpoints/

@@ -1,0 +1,47 @@
+# M2 milestone (see docs/PLAN.md): Mario with Stage A hand-crafted feature
+# input, mushroom-body subcircuit only (not the full connectome). Goal is
+# "moves right on its own; beats random actions".
+
+env:
+  world_stage: "SuperMarioBros-1-1-v0"
+  frame_skip: 4
+  reward:
+    dx_weight: 0.1
+    time_penalty: 0.01
+    death_penalty: 15.0
+    flag_bonus: 50.0
+    clip: 1.0
+
+sensory:
+  sense_range_px: 80.0
+  max_rate_hz: 200.0
+
+connectome:
+  source: shiu          # shiu | toy  (toy = connectome.loader.load_toy_connectome, for dry runs)
+  data_dir: data/
+  subcircuit_hops: 2
+
+learning:
+  dopamine:
+    eta: 0.01
+    trace_decay: 0.95
+    w_min: 0.0
+    w_max: 2.0
+  actor:
+    gamma: 0.9
+    eta_actor: 0.01
+    trace_decay: 0.9
+    da_gain: 1.0
+
+decision:
+  window_ms: 80          # brain time simulated per game decision (~1 frame-skip step)
+  epsilon_start: 0.3
+  epsilon_end: 0.05
+  epsilon_decay_episodes: 500
+
+training:
+  n_episodes: 5000
+  max_steps_per_episode: 3000
+  log_every: 10
+  checkpoint_every: 100
+  out_dir: runs/m2_features_subcircuit

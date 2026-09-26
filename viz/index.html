@@ -1,0 +1,533 @@
+<title>Fly Brain Activity</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg: #0a0d12;
+    --panel: #12161e;
+    --panel-2: #171c26;
+    --line: #262e3b;
+    --ink: #e7ebf2;
+    --ink-dim: #8a94a6;
+    --ink-faint: #4c5566;
+    --seed: #f5b942;
+    --seed-glow: #ffd684;
+    --motor: #ef5da8;
+    --motor-glow: #ff8fc7;
+    --active: #4fd9c7;
+    --active-glow: #8ff5e6;
+    --exc-edge: rgba(79,217,199,0.35);
+    --inh-edge: rgba(239,93,168,0.35);
+    --accent: #4fd9c7;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    min-height: 100dvh;
+  }
+  .wrap{
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-block: 20px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  header{
+    display:flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+  }
+  h1{
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  h1 span{ color: var(--active); }
+  .subtitle{
+    font-size: 0.82rem;
+    color: var(--ink-dim);
+    max-width: 60ch;
+    margin: 4px 0 0;
+  }
+  .badge-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .badge{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    color: var(--ink-dim);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .badge b{ color: var(--ink); font-weight: 600; }
+
+  main{
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 260px;
+    gap: 16px;
+  }
+  @media (max-width: 860px){
+    main{ grid-template-columns: 1fr; }
+  }
+
+  .stage{
+    position: relative;
+    background: radial-gradient(120% 140% at 15% 10%, #131a24 0%, var(--panel) 55%, #0d1119 100%);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    min-height: 420px;
+  }
+  canvas{ display:block; width:100%; height:100%; touch-action: none; }
+
+  .col-labels{
+    position:absolute; top:10px; left:0; right:0;
+    display:flex; justify-content: space-between;
+    padding: 0 24px;
+    pointer-events:none;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .tooltip{
+    position:absolute;
+    pointer-events:none;
+    background: #0d1119;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink);
+    line-height: 1.5;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    max-width: 220px;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    z-index: 5;
+  }
+  .tooltip .tt-title{ color: var(--active); font-weight:600; margin-bottom:2px; }
+  .tooltip a{ color: var(--ink-dim); }
+
+  .transport{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--panel-2);
+  }
+  .play-btn{
+    width: 34px; height:34px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--active);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    flex: none;
+    font-size: 0.9rem;
+  }
+  .play-btn:hover{ border-color: var(--active); }
+  input[type=range]{
+    flex:1;
+    accent-color: var(--active);
+    height: 4px;
+  }
+  .t-label{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-dim);
+    min-width: 74px;
+    text-align:right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  aside{
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .panel h2{
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+  .legend-row{
+    display:flex; align-items:center; gap:8px;
+    font-size: 0.78rem; color: var(--ink-dim);
+    padding: 3px 0;
+  }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .stat{
+    display:flex; justify-content:space-between;
+    font-size: 0.8rem;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .stat:last-child{ border-bottom:none; }
+  .stat b{
+    font-family:"IBM Plex Mono", monospace;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .note{
+    font-size: 0.76rem;
+    line-height: 1.55;
+    color: var(--ink-dim);
+  }
+  .note b{ color: var(--ink); }
+  .selected-box{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.74rem;
+    color: var(--ink-dim);
+    line-height:1.6;
+    word-break: break-all;
+  }
+  .selected-box .none{ color: var(--ink-faint); }
+  .selected-box a{ color: var(--active); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fly Brain <span>Activity</span></h1>
+      <p class="subtitle">Real spikes from a simulation of the actual FlyWire connectome — not an illustration.</p>
+    </div>
+    <div class="badge-row">
+      <span class="badge"><b>138,639</b> neurons in the full connectome</span>
+      <span class="badge"><b>396</b> fired in this run</span>
+      <span class="badge"><b>300ms</b> simulated</span>
+    </div>
+  </header>
+
+  <main>
+    <div>
+      <div class="stage" id="stage">
+        <div class="col-labels">
+          <span>sugar-sensing input</span>
+          <span>multi-synaptic relay</span>
+          <span>feeding motor output (MN9)</span>
+        </div>
+        <canvas id="cv"></canvas>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+      <div class="transport">
+        <button class="play-btn" id="playBtn" aria-label="Pause">⏸</button>
+        <input type="range" id="scrub" min="0" max="29" value="0" step="1">
+        <span class="t-label" id="tLabel">0 – 10 ms</span>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Legend</h2>
+        <div class="legend-row"><span class="dot" style="background:var(--seed)"></span> sugar-sensing neuron (driven)</div>
+        <div class="legend-row"><span class="dot" style="background:var(--active)"></span> downstream neuron, fired</div>
+        <div class="legend-row"><span class="dot" style="background:var(--motor)"></span> MN9 — feeding motor neuron</div>
+        <div class="legend-row"><span class="dot" style="background:var(--ink-faint)"></span> quiet at this instant</div>
+      </div>
+
+      <div class="panel">
+        <h2>This run</h2>
+        <div class="stat"><span>Sugar neurons stimulated</span><b id="statSeed">20</b></div>
+        <div class="stat"><span>Subcircuit simulated</span><b id="statSub">14,450</b></div>
+        <div class="stat"><span>Neurons that fired</span><b id="statActive">396</b></div>
+        <div class="stat"><span>MN9 spikes</span><b id="statMn9">41</b></div>
+        <div class="stat"><span>Time bin</span><b id="statBin">10 ms</b></div>
+      </div>
+
+      <div class="panel">
+        <h2>Selected neuron</h2>
+        <div class="selected-box" id="selBox"><span class="none">Click a node to inspect it.</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>What's real here</h2>
+        <p class="note">
+          Every position is a real FlyWire neuron; every line is a real synaptic
+          connection. Node brightness comes from a <b>leaky integrate-and-fire</b>
+          simulation using Shiu et al. 2024's published, validated parameters —
+          driving 20 real sugar-sensing neurons and watching activity spread,
+          three to four synapses deep, to the real feeding motor neuron <b>MN9</b>.
+        </p>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const tooltip = document.getElementById('tooltip');
+  const scrub = document.getElementById('scrub');
+  const playBtn = document.getElementById('playBtn');
+  const tLabel = document.getElementById('tLabel');
+  const selBox = document.getElementById('selBox');
+
+  let data = null, nodes = [], edges = [], outAdj = new Map();
+  let playing = true, rafId = null, lastT = 0, frameMs = 160;
+  let selected = null;
+  let hoverId = null;
+  const DECAY_BINS = 4; // how many bins a spike's glow persists/fades over
+
+  function hashJitter(id, salt){
+    let x = Math.sin(id * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  function layout(){
+    // IMPORTANT: use CSS-pixel dimensions here, not cv.width/cv.height (which
+    // are device-pixel buffer sizes scaled by dpr) -- ctx is already scaled
+    // by dpr via setTransform in resize(), so node.x/y must be in the same
+    // CSS-pixel space the drawing calls run in, or layout breaks on any
+    // devicePixelRatio > 1 display.
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    const w = cv.width / dpr, h = cv.height / dpr;
+    const maxHop = data.max_hop;
+    const marginX = w * 0.09, marginY = h * 0.12;
+    const usableW = w - marginX * 2;
+    const usableH = h - marginY * 2;
+
+    // group by hop for vertical distribution
+    const byHop = new Map();
+    for(const n of nodes){
+      if(!byHop.has(n.hop)) byHop.set(n.hop, []);
+      byHop.get(n.hop).push(n);
+    }
+    for(const [hop, arr] of byHop){
+      arr.sort((a,b)=> b.total_spikes - a.total_spikes);
+      const count = arr.length;
+      arr.forEach((n, i)=>{
+        const frac = count === 1 ? 0.5 : i/(count-1);
+        const jitter = (hashJitter(n.id, 1) - 0.5) * (usableH / Math.max(count,6)) * 0.7;
+        n.x = marginX + (maxHop <= 1 ? usableW/2 : (n.hop/(maxHop)) * usableW);
+        n.y = marginY + frac * usableH + jitter;
+      });
+    }
+    // pull MN9 to a distinct final column
+    const mn9 = nodes.find(n=>n.is_mn9);
+    if(mn9){ mn9.x = marginX + usableW * 1.0; mn9.y = h/2; }
+  }
+
+  function resize(){
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = Math.max(320, rect.width) * dpr;
+    cv.height = Math.max(320, rect.height) * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(data) layout();
+    draw();
+  }
+
+  function activityAt(node, bin){
+    // returns 0..1 glow intensity with short decay tail
+    let v = 0;
+    for(let k=0;k<=DECAY_BINS;k++){
+      const b = bin - k;
+      if(b < 0) break;
+      const s = node.activity[b] || 0;
+      if(s > 0) v = Math.max(v, 1 - k/(DECAY_BINS+1));
+    }
+    return v;
+  }
+
+  // resolve the palette once -- these are static :root tokens, no need to
+  // call getComputedStyle per-node per-frame (396 nodes at ~60fps adds up)
+  const palette = {};
+  ['--seed','--seed-glow','--motor','--motor-glow','--active','--active-glow','--ink-faint']
+    .forEach(name => { palette[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); });
+  const cssVar = (name) => palette[name];
+
+  function colorFor(node){
+    if(node.is_seed) return {base:'--seed', glow:'--seed-glow'};
+    if(node.is_mn9) return {base:'--motor', glow:'--motor-glow'};
+    return {base:'--active', glow:'--active-glow'};
+  }
+
+  function draw(){
+    const w = cv.width / (window.devicePixelRatio||1);
+    const h = cv.height / (window.devicePixelRatio||1);
+    ctx.clearRect(0,0,w,h);
+    const bin = parseInt(scrub.value,10);
+
+    // edges: only draw ones touching a currently-glowing node, to keep it legible
+    const glow = new Map();
+    for(const n of nodes) glow.set(n.id, activityAt(n, bin));
+
+    ctx.lineWidth = 1;
+    for(const e of edges){
+      const a = glow.get(e.source) || 0;
+      const b = glow.get(e.target) || 0;
+      const g = Math.max(a,b);
+      if(g < 0.12) continue;
+      const s = nodeById.get(e.source), t = nodeById.get(e.target);
+      if(!s || !t) continue;
+      ctx.strokeStyle = e.sign > 0
+        ? `rgba(79,217,199,${0.08 + g*0.4})`
+        : `rgba(239,93,168,${0.08 + g*0.4})`;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(t.x, t.y);
+      ctx.stroke();
+    }
+
+    for(const n of nodes){
+      const g = glow.get(n.id) || 0;
+      const c = colorFor(n);
+      const baseColor = cssVar(c.base);
+      const glowColor = cssVar(c.glow);
+      const baseR = 2.2 + Math.sqrt(n.total_spikes) * 0.9;
+      const r = baseR + g * 2.2;
+
+      if(g > 0.05){
+        ctx.save();
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 10 + g*14;
+        ctx.fillStyle = glowColor;
+        ctx.globalAlpha = 0.55 + g*0.45;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = cssVar('--ink-faint');
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, baseR*0.8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      if(selected === n.id || hoverId === n.id){
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r+3, 0, Math.PI*2);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    tLabel.textContent = `${bin*10} – ${bin*10+10} ms`;
+  }
+
+  let nodeById = new Map();
+
+  function nodeAtPoint(px, py){
+    let best = null, bestD = 12*12;
+    for(const n of nodes){
+      const dx = n.x-px, dy = n.y-py;
+      const d = dx*dx+dy*dy;
+      if(d < bestD){ bestD = d; best = n; }
+    }
+    return best;
+  }
+
+  function showTooltip(n, clientX, clientY){
+    if(!n){ tooltip.style.opacity = 0; return; }
+    const rect = stage.getBoundingClientRect();
+    tooltip.innerHTML = `<div class="tt-title">${n.is_seed ? 'Sugar-sensing neuron' : n.is_mn9 ? 'MN9 (feeding motor neuron)' : 'Downstream neuron'}</div>`
+      + `root id ${n.root_id}<br>hop distance: ${n.hop}<br>total spikes: ${n.total_spikes}`;
+    tooltip.style.left = Math.min(clientX - rect.left + 12, rect.width - 200) + 'px';
+    tooltip.style.top = Math.max(clientY - rect.top - 50, 4) + 'px';
+    tooltip.style.opacity = 1;
+  }
+
+  function selectNode(n){
+    selected = n ? n.id : null;
+    if(!n){ selBox.innerHTML = '<span class="none">Click a node to inspect it.</span>'; return; }
+    selBox.innerHTML = `root id: ${n.root_id}<br>`
+      + `type: ${n.is_seed ? 'sugar-sensing (driven)' : n.is_mn9 ? 'MN9 motor neuron' : 'relay'}<br>`
+      + `hop distance: ${n.hop}<br>`
+      + `total spikes (300ms): ${n.total_spikes}<br>`
+      + `<a href="https://codex.flywire.ai/app/search?filter_root_id=${n.root_id}" target="_blank" rel="noopener">view in FlyWire Codex →</a>`;
+  }
+
+  cv.addEventListener('mousemove', (e)=>{
+    const rect = cv.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    const n = nodeAtPoint(px, py);
+    hoverId = n ? n.id : null;
+    showTooltip(n, e.clientX, e.clientY);
+    cv.style.cursor = n ? 'pointer' : 'default';
+    draw();
+  });
+  cv.addEventListener('mouseleave', ()=>{ hoverId=null; showTooltip(null); draw(); });
+  cv.addEventListener('click', (e)=>{
+    const rect = cv.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    const n = nodeAtPoint(px, py);
+    selectNode(n);
+    draw();
+  });
+
+  scrub.addEventListener('input', ()=>{
+    playing = false;
+    playBtn.textContent = '▶';
+    playBtn.setAttribute('aria-label', 'Play');
+    draw();
+  });
+  playBtn.addEventListener('click', ()=>{
+    playing = !playing;
+    playBtn.textContent = playing ? '⏸' : '▶';
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    if(playing){ lastT = 0; rafId = requestAnimationFrame(tick); }
+  });
+
+  function tick(ts){
+    if(!playing) return;
+    if(!lastT) lastT = ts;
+    if(ts - lastT >= frameMs){
+      lastT = ts;
+      let v = parseInt(scrub.value,10) + 1;
+      if(v > parseInt(scrub.max,10)) v = 0;
+      scrub.value = v;
+      draw();
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  fetch('brain_activity.json').then(r=>r.json()).then(json=>{
+    data = json;
+    nodes = json.nodes.map(n=>({...n, is_seed: n.is_sugar}));
+    edges = json.edges;
+    nodeById = new Map(nodes.map(n=>[n.id, n]));
+    scrub.max = json.n_bins - 1;
+    document.getElementById('statBin').textContent = json.bin_ms + ' ms';
+    resize();
+    window.addEventListener('resize', resize);
+    playBtn.textContent = playing ? '⏸' : '▶'; // matches `playing` being true from the start
+    rafId = requestAnimationFrame(tick);
+  }).catch(err=>{
+    ctx.fillStyle = '#e7ebf2';
+    ctx.font = '14px monospace';
+    ctx.fillText('Could not load brain_activity.json: ' + err, 20, 30);
+  });
+})();
+</script>

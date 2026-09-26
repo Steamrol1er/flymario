@@ -1,0 +1,444 @@
+<title>Fly Plays Flappy Bird</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg: #0a0d12;
+    --panel: #12161e;
+    --panel-2: #171c26;
+    --line: #262e3b;
+    --ink: #e7ebf2;
+    --ink-dim: #8a94a6;
+    --ink-faint: #4c5566;
+    --fly: #f5b942;
+    --fly-glow: #ffd684;
+    --good: #4fd9c7;
+    --bad: #ef5da8;
+    --pipe: #3a4a63;
+    --pipe-lip: #4c5f7d;
+    --sky-top: #0e2a3a;
+    --sky-bot: #142230;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background: var(--bg); color: var(--ink);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    min-height: 100dvh;
+  }
+  .wrap{ max-width: 1400px; margin: 0 auto; padding-block: 20px 32px; display:flex; flex-direction:column; gap:16px; }
+  header{
+    display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between;
+    gap: 8px 24px; border-bottom: 1px solid var(--line); padding-bottom: 14px;
+  }
+  h1{ font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  h1 span{ color: var(--fly); }
+  .subtitle{ font-size: 0.82rem; color: var(--ink-dim); max-width: 64ch; margin: 4px 0 0; }
+  .badge-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .badge{
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; letter-spacing: 0.02em;
+    color: var(--ink-dim); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+  }
+  .badge b{ color: var(--ink); font-weight: 600; }
+  .badge.warn{ color: var(--bad); border-color: rgba(239,93,168,0.4); }
+
+  .tabs{ display:flex; gap:6px; flex-wrap:wrap; }
+  .tab{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.74rem;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 8px; padding: 7px 12px; cursor:pointer;
+  }
+  .tab.active{ color: var(--bg); background: var(--fly); border-color: var(--fly); font-weight:600; }
+  .tab .win{ color: var(--good); }
+  .tab.active .win{ color: var(--bg); }
+  .tab.ref{ border-style: dashed; }
+
+  main{ display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 16px; }
+  @media (max-width: 900px){ main{ grid-template-columns: 1fr; } }
+
+  .stage{
+    position: relative; border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; min-height: 300px;
+    background: linear-gradient(var(--sky-top), var(--sky-bot));
+  }
+  .stage canvas{ display:block; width:100%; height:100%; }
+  .outcome-flag{
+    position:absolute; top:14px; right:16px;
+    font-family:"IBM Plex Mono", monospace; font-size: 0.74rem;
+    padding: 6px 12px; border-radius: 8px;
+    background: rgba(10,13,18,0.65); border: 1px solid var(--line);
+  }
+  .outcome-flag.won{ color: var(--good); border-color: var(--good); }
+  .outcome-flag.dead{ color: var(--bad); border-color: var(--bad); }
+  .score-tag{
+    position:absolute; top:14px; left:16px;
+    font-family:"IBM Plex Mono", monospace; font-size: 0.9rem; font-weight:600;
+    padding: 6px 12px; border-radius: 8px; color: var(--ink);
+    background: rgba(10,13,18,0.65); border: 1px solid var(--line);
+  }
+
+  .transport{
+    display:flex; align-items:center; gap: 12px;
+    padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel-2);
+  }
+  .play-btn{
+    width: 34px; height:34px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--bg); color: var(--fly); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex: none; font-size: 0.9rem;
+  }
+  .play-btn:hover{ border-color: var(--fly); }
+  input[type=range]{ flex:1; accent-color: var(--fly); height: 4px; }
+  .t-label{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--ink-dim);
+    min-width: 84px; text-align:right; font-variant-numeric: tabular-nums;
+  }
+
+  aside{ display:flex; flex-direction:column; gap:12px; }
+  .panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .panel h2{
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-faint); margin: 0 0 10px; font-weight: 600;
+  }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size: 0.78rem; color: var(--ink-dim); padding: 3px 0; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .sq{ width:9px; height:9px; flex:none; }
+
+  .buttons-row{ display:flex; gap:6px; margin-top: 4px; }
+  .btn-chip{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.68rem;
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px;
+    color: var(--ink-faint); background: var(--panel-2);
+  }
+  .btn-chip.on{ color: var(--bg); background: var(--fly); border-color: var(--fly); font-weight:600; }
+
+  .stat{ display:flex; justify-content:space-between; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .stat:last-child{ border-bottom:none; }
+  .stat b{ font-family:"IBM Plex Mono", monospace; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .bar{ height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; }
+  .bar > i{ display:block; height:100%; width:0%; transition: width 0.08s linear; }
+  .note{ font-size: 0.76rem; line-height: 1.55; color: var(--ink-dim); }
+  .note b{ color: var(--ink); }
+  .note.warn b{ color: var(--bad); }
+
+  .curve{ width:100%; height: 70px; display:block; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fly Plays <span>Flappy Bird</span></h1>
+      <p class="subtitle">The same real dopamine learning code as the platformer demo, tried on a harder, continuous-timing task — with an honest result this time.</p>
+    </div>
+    <div class="badge-row">
+      <span class="badge"><b id="badgeEpisodes">–</b> episodes trained</span>
+      <span class="badge warn"><b id="badgeScore">0</b> pipes passed by the agent</span>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+
+  <main>
+    <div>
+      <div class="stage" id="stage">
+        <canvas id="cv"></canvas>
+        <div class="score-tag" id="scoreTag">score 0</div>
+        <div class="outcome-flag" id="outcomeFlag"></div>
+      </div>
+      <div class="transport">
+        <button class="play-btn" id="playBtn" aria-label="Pause">⏸</button>
+        <input type="range" id="scrub" min="0" max="1" value="0" step="1">
+        <span class="t-label" id="tLabel">step 0</span>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Legend</h2>
+        <div class="legend-row"><span class="dot" style="background:var(--fly)"></span> the agent</div>
+        <div class="legend-row"><span class="sq" style="background:var(--pipe)"></span> pipe (gap to fly through)</div>
+      </div>
+
+      <div class="panel">
+        <h2>This instant</h2>
+        <div class="buttons-row" id="buttonsRow"></div>
+        <div class="stat" style="margin-top:8px;"><span>Value V(s)</span><b id="statValue">0.00</b></div>
+        <div class="bar"><i id="valueFill" style="background:var(--good)"></i></div>
+        <div class="stat" style="margin-top:8px;"><span>Dopamine (|δ|)</span><b id="statDelta">0.00</b></div>
+        <div class="bar"><i id="deltaFill"></i></div>
+        <div class="stat" style="margin-top:8px;"><span>Active KCs</span><b id="statKC">0</b> / <span id="statKCTotal">200</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>Score across training</h2>
+        <svg class="curve" id="curveSvg" viewBox="0 0 260 70" preserveAspectRatio="none"></svg>
+        <p class="note" style="margin-top:6px;">Pipes passed per episode, real training data, smoothed over 50-episode windows — flat at zero the whole way.</p>
+      </div>
+
+      <div class="panel">
+        <h2>An honest negative result</h2>
+        <p class="note warn">
+          The trained agent passed <b>zero pipes in 2000 episodes</b>. This
+          isn't a rendering trick or a cherry-picked bad run — it's the
+          real outcome. Flappy Bird needs continuous positional tracking
+          every frame, unlike the platformer's single "jump at the gap"
+          decision, and that turned out to be genuinely harder for a
+          linear Kenyon-cell readout trained with this simple actor-critic
+          rule.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>What we found along the way</h2>
+        <p class="note">
+          Debugging this surfaced a real bug: unnormalized Kenyon-cell
+          activity (~100 simultaneously active units, unbounded magnitude)
+          made the mushroom body's value estimate swing wildly, saturating
+          the actor's weights to their clamp bounds within the first ~50
+          episodes and freezing the policy for the rest of training. Adding
+          divisive normalization (a real mechanism in actual neural
+          circuits) fixed that specific instability — but the agent still
+          didn't learn to solve the task. The <b>hand-coded reference</b>
+          tab shows the environment genuinely is solvable (score 3, no
+          learning involved) — the gap is in the learning method, not the
+          game.
+        </p>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const scrub = document.getElementById('scrub');
+  const playBtn = document.getElementById('playBtn');
+  const tLabel = document.getElementById('tLabel');
+  const tabsEl = document.getElementById('tabs');
+  const outcomeFlag = document.getElementById('outcomeFlag');
+  const scoreTag = document.getElementById('scoreTag');
+  const buttonsRow = document.getElementById('buttonsRow');
+  const statValue = document.getElementById('statValue');
+  const valueFill = document.getElementById('valueFill');
+  const statDelta = document.getElementById('statDelta');
+  const deltaFill = document.getElementById('deltaFill');
+  const statKC = document.getElementById('statKC');
+  const statKCTotal = document.getElementById('statKCTotal');
+
+  let data = null, episodes = [], currentIdx = 0, trace = [];
+  let playing = true, lastT = 0, frameMs = 60;
+  const BIRD_X_FRAC = 0.28; // fixed horizontal position on screen
+
+  const palette = {};
+  ['--sky-top','--sky-bot','--pipe','--pipe-lip','--fly','--fly-glow','--good','--bad','--bg']
+    .forEach(name => { palette[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); });
+  const getVar = (name) => palette[name];
+
+  function resize(){
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = rect.width * dpr;
+    cv.height = Math.max(rect.height, 260) * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  function drawScene(frame){
+    const rect = stage.getBoundingClientRect();
+    const w = rect.width, h = Math.max(rect.height, 260);
+    ctx.clearRect(0,0,w,h);
+
+    const birdX = w * BIRD_X_FRAC;
+    const birdY = frame.player_y * h;
+
+    // pipe: frame.pipe = [horizontal_dist(0..1), top_y(0..1), bottom_y(0..1)]
+    const [distFrac, topFrac, botFrac] = frame.pipe;
+    const pipeX = birdX + distFrac * w;
+    const gapTop = topFrac * h, gapBot = botFrac * h;
+    const pipeWidth = Math.max(w*0.07, 26);
+
+    if(pipeX < w + pipeWidth){
+      ctx.fillStyle = getVar('--pipe');
+      ctx.fillRect(pipeX - pipeWidth/2, 0, pipeWidth, Math.max(gapTop,0));
+      ctx.fillRect(pipeX - pipeWidth/2, gapBot, pipeWidth, h - gapBot);
+      ctx.fillStyle = getVar('--pipe-lip');
+      ctx.fillRect(pipeX - pipeWidth/2 - 3, Math.max(gapTop-10,0), pipeWidth+6, 10);
+      ctx.fillRect(pipeX - pipeWidth/2 - 3, gapBot, pipeWidth+6, 10);
+    }
+
+    drawFly(birdX, birdY, frame.rot);
+
+    if(frame.dead){
+      ctx.save();
+      ctx.globalAlpha = 0.15 + 0.1*Math.sin(Date.now()/80);
+      ctx.fillStyle = getVar('--bad');
+      ctx.fillRect(0,0,w,h);
+      ctx.restore();
+    }
+  }
+
+  function drawFly(x, y, rot){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.max(Math.min(-rot/90*0.6, 0.6), -0.9));
+    const wingPhase = (Date.now()/40) % (Math.PI*2);
+    const wingLift = 3 + Math.sin(wingPhase)*2;
+    ctx.fillStyle = 'rgba(245,185,66,0.35)';
+    ctx.beginPath(); ctx.ellipse(-3, -wingLift, 7, 3.2, -0.4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3, -wingLift, 7, 3.2, 0.4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = getVar('--fly');
+    ctx.beginPath(); ctx.ellipse(0, 0, 7, 5.5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = getVar('--fly-glow');
+    ctx.beginPath(); ctx.ellipse(-3, -2, 2.6, 2.2, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function frameAt(i){
+    const s = trace[Math.min(i, trace.length-1)];
+    const dead = i === trace.length-1 && !!episodes[currentIdx].dead;
+    return {
+      player_y: s.player_y, rot: s.player_rot, pipe: s.pipe,
+      action: s.action, value: s.value, delta: s.dopamine_delta, kc: s.kc_active, dead,
+    };
+  }
+
+  function applyStep(i){
+    const f = frameAt(i);
+    drawScene(f);
+    tLabel.textContent = `step ${i}`;
+
+    buttonsRow.innerHTML = '';
+    ['noop','flap'].forEach(b=>{
+      const chip = document.createElement('span');
+      chip.className = 'btn-chip' + (f.action === b ? ' on' : '');
+      chip.textContent = b;
+      buttonsRow.appendChild(chip);
+    });
+
+    statValue.textContent = f.value.toFixed(2);
+    const vNorm = Math.max(0, Math.min((f.value+2)/4, 1));
+    valueFill.style.width = (vNorm*100).toFixed(0)+'%';
+
+    statDelta.textContent = Math.abs(f.delta).toFixed(2);
+    deltaFill.style.background = f.delta >= 0 ? getVar('--good') : getVar('--bad');
+    deltaFill.style.width = (Math.min(Math.abs(f.delta)/0.5,1)*100).toFixed(0)+'%';
+
+    statKC.textContent = f.kc;
+
+    // running score: count pipe-pass events up to this point in the trace.
+    // Threshold at 0.5, not 1.0 -- the training script's SHAPED reward adds
+    // +1.0 for a pipe pass on top of an already-slightly-negative base
+    // (distance-from-gap-center penalty), so after clipping to [-1,1] a
+    // real pipe-pass can land just under 1.0. The unshaped reference
+    // episode's raw reward is exactly 1.0 on a pass either way, so 0.5
+    // catches both correctly without ever confusing it with an ordinary
+    // per-step reward (all of which stay well below that).
+    let score = 0;
+    for(let k=0;k<=Math.min(i, trace.length-1);k++){ if(trace[k].reward >= 0.5) score++; }
+    scoreTag.textContent = `score ${score}`;
+
+    if(i >= trace.length-1){
+      const ep = episodes[currentIdx];
+      outcomeFlag.style.display = 'block';
+      outcomeFlag.className = 'outcome-flag ' + (ep.dead ? 'dead' : 'won');
+      outcomeFlag.textContent = ep.dead ? `died — score ${ep.score}` : `episode ended — score ${ep.score}`;
+    } else {
+      outcomeFlag.style.display = 'none';
+    }
+  }
+
+  function draw(){ if(trace.length) applyStep(parseInt(scrub.value,10)); }
+
+  function tick(ts){
+    if(!lastT) lastT = ts;
+    if(playing && ts - lastT >= frameMs){
+      lastT = ts;
+      let v = parseInt(scrub.value,10) + 1;
+      if(v >= trace.length) v = 0;
+      scrub.value = v;
+    }
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  function selectEpisode(idx){
+    currentIdx = idx;
+    trace = episodes[idx].trace;
+    scrub.max = Math.max(trace.length - 1, 0);
+    scrub.value = 0;
+    [...tabsEl.children].forEach((el,i)=> el.classList.toggle('active', i===idx));
+    draw();
+  }
+
+  function buildTabs(){
+    tabsEl.innerHTML = '';
+    episodes.forEach((ep, i)=>{
+      const tab = document.createElement('div');
+      tab.className = 'tab' + (ep.isRef ? ' ref' : '');
+      tab.innerHTML = ep.label + (ep.score > 0 ? ` <span class="win">— score ${ep.score}</span>` : '');
+      tab.addEventListener('click', ()=> selectEpisode(i));
+      tabsEl.appendChild(tab);
+    });
+  }
+
+  function buildCurve(history){
+    const svg = document.getElementById('curveSvg');
+    const win = 50;
+    const pts = [];
+    for(let i=0; i<history.length; i+=win){
+      const chunk = history.slice(i, i+win);
+      const avg = chunk.reduce((a,h)=>a+h.score,0) / chunk.length;
+      pts.push(avg);
+    }
+    const maxV = Math.max(...pts, 1);
+    const W = 260, H = 70, pad = 4;
+    const stepX = (W - pad*2) / Math.max(pts.length-1,1);
+    const path = pts.map((v,i)=>{
+      const x = pad + i*stepX;
+      const y = H - pad - (v/maxV)*(H-pad*2);
+      return `${i===0?'M':'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    svg.innerHTML = `<path d="${path}" fill="none" stroke="${getVar('--fly')}" stroke-width="2"/>`;
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    playing = !playing;
+    playBtn.textContent = playing ? '⏸' : '▶';
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    lastT = 0;
+  });
+  scrub.addEventListener('input', ()=>{
+    playing = false;
+    playBtn.textContent = '▶';
+    playBtn.setAttribute('aria-label','Play');
+    draw();
+  });
+
+  fetch('flappybird_run.json').then(r=>r.json()).then(json=>{
+    data = json;
+    statKCTotal.textContent = json.n_kc;
+    document.getElementById('badgeEpisodes').textContent = json.history.length.toLocaleString();
+    document.getElementById('badgeScore').textContent = Math.max(...json.history.map(h=>h.score));
+
+    episodes = [
+      { label: `Before training (ep 0)`, ...data.early_episode, score: data.early_episode.score },
+      { label: `Best attempt (ep ${data.best_episode.ep})`, ...data.best_episode, score: data.best_episode.score },
+      { label: `Late in training`, ...data.late_episode, score: data.late_episode.score },
+      { label: `Hand-coded reference (not RL)`, ...data.heuristic_episode, score: data.heuristic_episode.score, isRef: true },
+    ];
+    buildTabs();
+    buildCurve(data.history);
+    resize();
+    selectEpisode(3); // open on the reference run so there's something that actually flies well
+    requestAnimationFrame(tick);
+  }).catch(err=>{
+    ctx.fillStyle = '#e7ebf2';
+    ctx.font = '14px monospace';
+    ctx.fillText('Could not load flappybird_run.json: ' + err, 20, 30);
+  });
+})();
+</script>

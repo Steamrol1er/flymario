@@ -1,0 +1,36 @@
+/* Shared style for the three live-demo tabs. No external fonts or CDN
+   assets on purpose -- this runs locally, possibly offline. */
+:root{
+  --bg: #0a0d12;
+  --panel: #12161e;
+  --line: #262e3b;
+  --ink: #e7ebf2;
+  --ink-dim: #8a94a6;
+  --fly: #f5b942;
+  --good: #4fd9c7;
+  --bad: #ef5da8;
+}
+*{ box-sizing: border-box; }
+html, body{
+  margin: 0; height: 100%;
+  background: var(--bg); color: var(--ink);
+  font-family: ui-monospace, "SF Mono", Consolas, "Courier New", monospace;
+}
+.wrap{ max-width: 760px; margin: 0 auto; padding: 18px 16px 28px; display:flex; flex-direction:column; gap:14px; }
+h1{ font-size: 1.05rem; margin: 0; font-weight:600; }
+h1 span{ color: var(--fly); }
+.tabnav{ display:flex; gap:8px; font-size: 0.7rem; }
+.tabnav a{ color: var(--ink-dim); text-decoration:none; border:1px solid var(--line); border-radius:6px; padding:4px 10px; }
+.tabnav a.active{ color: var(--bg); background: var(--fly); border-color: var(--fly); }
+
+.panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.panel h2{ font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-dim); margin: 0 0 10px; }
+.row{ display:flex; justify-content:space-between; font-size: 0.78rem; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.row:last-child{ border-bottom:none; }
+.row b{ color: var(--ink); font-variant-numeric: tabular-nums; }
+.bar{ height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 5px; }
+.bar>i{ display:block; height:100%; width:0%; }
+
+.status{ font-size: 0.68rem; color: var(--ink-dim); }
+.status.live::before{ content:"● "; color: var(--good); }
+.status.stale::before{ content:"● "; color: var(--bad); }

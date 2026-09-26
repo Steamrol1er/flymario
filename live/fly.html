@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FlyMario Live — Fly</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .stage{ background: var(--panel); border: 1px solid var(--line); border-radius: 10px; aspect-ratio: 4/3; }
+  .stage canvas{ display:block; width:100%; height:100%; }
+  .btn-chip{
+    font-size: 0.7rem; border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 10px; color: var(--ink-dim); background: var(--panel);
+  }
+  .btn-chip.on{ color: var(--bg); background: var(--fly); border-color: var(--fly); font-weight:600; }
+  .chiprow{ display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FlyMario Live — <span>Fly</span></h1>
+  <div class="tabnav">
+    <a href="game.html">Game</a>
+    <a class="active" href="fly.html">Fly</a>
+    <a href="brain.html">Brain</a>
+  </div>
+
+  <div class="stage"><canvas id="cv"></canvas></div>
+
+  <div class="panel">
+    <h2>Action this instant</h2>
+    <div class="chiprow" id="chipRow"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Value V(s) — the mushroom body's approach/avoid balance</h2>
+    <div class="row"><span>value</span><b id="statValue">0.00</b></div>
+    <div class="bar"><i id="valueFill" style="background:var(--good)"></i></div>
+  </div>
+
+  <div class="panel">
+    <h2>Dopamine — |reward-prediction error| this step</h2>
+    <div class="row"><span>|δ|</span><b id="statDelta">0.00</b></div>
+    <div class="bar"><i id="deltaFill"></i></div>
+  </div>
+
+  <div class="panel">
+    <h2>Learning state</h2>
+    <div class="row"><span>exploration (ε)</span><b id="statEps">0.00</b></div>
+    <div class="row"><span>points played</span><b id="statPlayed">0</b></div>
+    <div class="row"><span>points scored (fly)</span><b id="statScored">0</b></div>
+    <div class="row"><span>score rate</span><b id="statRate">0%</b></div>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+function resize(){
+  const rect = cv.parentElement.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*dpr; cv.height = rect.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+let action = 'NOOP';
+let t0 = performance.now();
+
+function drawFly(ts){
+  const rect = cv.parentElement.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0,0,w,h);
+
+  const cx = w/2;
+  let targetX = 0;
+  if(action === 'RIGHT' || action === 'RIGHTFIRE') targetX = -w*0.18;
+  else if(action === 'LEFT' || action === 'LEFTFIRE') targetX = w*0.18;
+
+  // two buttons
+  const btnY = h*0.72, btnW = w*0.22, btnH = h*0.12;
+  ctx.fillStyle = (action==='RIGHT'||action==='RIGHTFIRE') ? '#4fd9c7' : '#262e3b';
+  ctx.fillRect(cx - w*0.18 - btnW/2, btnY, btnW, btnH);
+  ctx.fillStyle = (action==='LEFT'||action==='LEFTFIRE') ? '#4fd9c7' : '#262e3b';
+  ctx.fillRect(cx + w*0.18 - btnW/2, btnY, btnW, btnH);
+  ctx.fillStyle = '#8a94a6';
+  ctx.font = (h*0.045)+'px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('UP', cx - w*0.18, btnY + btnH*0.65);
+  ctx.fillText('DOWN', cx + w*0.18, btnY + btnH*0.65);
+
+  // fly body, bob + drift toward the pressed button
+  const bob = Math.sin(ts/220)*h*0.015;
+  const flyX = cx + targetX*0.9;
+  const flyY = h*0.42 + bob;
+  const wingPhase = (ts/45)%(Math.PI*2);
+  const wingLift = Math.sin(wingPhase)*h*0.02;
+
+  ctx.fillStyle = 'rgba(245,185,66,0.35)';
+  ctx.beginPath(); ctx.ellipse(flyX-w*0.05, flyY-wingLift-h*0.03, w*0.06, h*0.03, -0.4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(flyX+w*0.05, flyY-wingLift-h*0.03, w*0.06, h*0.03, 0.4, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#f5b942';
+  ctx.beginPath(); ctx.ellipse(flyX, flyY, w*0.07, h*0.06, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ffd684';
+  ctx.beginPath(); ctx.ellipse(flyX-w*0.02, flyY-h*0.015, w*0.02, h*0.018, 0, 0, Math.PI*2); ctx.fill();
+
+  // leg extends toward whichever button is active
+  const legDown = (targetX !== 0);
+  ctx.strokeStyle = '#2a2015'; ctx.lineWidth = Math.max(2, w*0.006);
+  ctx.beginPath();
+  ctx.moveTo(flyX, flyY + h*0.05);
+  ctx.lineTo(flyX, legDown ? btnY : flyY + h*0.16);
+  ctx.stroke();
+
+  requestAnimationFrame(drawFly);
+}
+requestAnimationFrame(drawFly);
+
+function poll(){
+  fetch('state.json').then(r=>r.json()).then(s=>{
+    action = s.action;
+    document.getElementById('statValue').textContent = s.value.toFixed(2);
+    document.getElementById('valueFill').style.width = Math.max(0,Math.min((s.value+1)/6,1))*100 + '%';
+    document.getElementById('statDelta').textContent = Math.abs(s.dopamine_delta).toFixed(2);
+    const deltaFill = document.getElementById('deltaFill');
+    deltaFill.style.background = s.dopamine_delta >= 0 ? 'var(--good)' : 'var(--bad)';
+    deltaFill.style.width = Math.min(Math.abs(s.dopamine_delta)/1,1)*100 + '%';
+    document.getElementById('statEps').textContent = s.epsilon.toFixed(2);
+    document.getElementById('statPlayed').textContent = s.points_played;
+    document.getElementById('statScored').textContent = s.points_scored;
+    const rate = s.points_played ? (100*s.points_scored/s.points_played).toFixed(1) : '0.0';
+    document.getElementById('statRate').textContent = rate + '%';
+
+    const chipRow = document.getElementById('chipRow');
+    chipRow.innerHTML = '';
+    ['NOOP','FIRE','RIGHT','LEFT','RIGHTFIRE','LEFTFIRE'].forEach(a=>{
+      const chip = document.createElement('span');
+      chip.className = 'btn-chip' + (a === s.action ? ' on' : '');
+      chip.textContent = a;
+      chipRow.appendChild(chip);
+    });
+  }).catch(()=>{});
+}
+setInterval(poll, 100);
+poll();
+</script>
+</body>
+</html>

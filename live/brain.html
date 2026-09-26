@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FlyMario Live — Brain</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .stage{ background: var(--panel); border: 1px solid var(--line); border-radius: 10px; aspect-ratio: 5/3; }
+  .stage canvas{ display:block; width:100%; height:100%; }
+  .mbon{ display:flex; gap:10px; }
+  .mbon .col{ flex:1; }
+  .mbon .label{ font-size:0.68rem; color:var(--ink-dim); margin-bottom:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FlyMario Live — <span>Brain</span></h1>
+  <div class="tabnav">
+    <a href="game.html">Game</a>
+    <a href="fly.html">Fly</a>
+    <a class="active" href="brain.html">Brain</a>
+  </div>
+
+  <div class="panel">
+    <h2>Kenyon cell activity — 200 units, live</h2>
+    <div class="stage"><canvas id="cv"></canvas></div>
+    <div class="row" style="margin-top:8px;"><span>active this instant</span><b id="statKC">0</b> / 200</div>
+  </div>
+
+  <div class="panel">
+    <h2>Mushroom body output (MBON balance)</h2>
+    <div class="mbon">
+      <div class="col">
+        <div class="label">approach</div>
+        <div class="bar" style="height:10px;"><i id="approachFill" style="background:var(--good)"></i></div>
+        <div class="row"><span></span><b id="statApproach">0.00</b></div>
+      </div>
+      <div class="col">
+        <div class="label">avoid</div>
+        <div class="bar" style="height:10px;"><i id="avoidFill" style="background:var(--bad)"></i></div>
+        <div class="row"><span></span><b id="statAvoid">0.00</b></div>
+      </div>
+    </div>
+    <p style="font-size:0.72rem;color:var(--ink-dim);line-height:1.5;margin:10px 0 0;">
+      value V(s) = approach − avoid. Every Kenyon cell above synapses onto
+      both compartments; dopamine (learning/dopamine.py) depresses the
+      active ones' synapses in whichever compartment the current reward
+      prediction error selects, exactly as in the toy-conditioning test
+      that validates this rule (tests/toy_conditioning.py).
+    </p>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+function resize(){
+  const rect = cv.parentElement.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*dpr; cv.height = rect.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  draw(lastActivity);
+}
+window.addEventListener('resize', resize);
+
+let lastActivity = new Array(200).fill(0);
+
+function draw(activity){
+  const rect = cv.parentElement.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  ctx.fillStyle = '#0a0d12';
+  ctx.fillRect(0,0,w,h);
+
+  const cols = 20, rows = 10;
+  const cw = w/cols, ch = h/rows;
+  const maxV = Math.max(...activity, 0.5);
+  for(let i=0;i<activity.length;i++){
+    const r = Math.floor(i/cols), c = i%cols;
+    const v = Math.max(0, Math.min(activity[i]/maxV, 1));
+    if(v < 0.02){
+      ctx.fillStyle = '#171c26';
+    } else {
+      // amber glow scaled by activity
+      const alpha = 0.15 + v*0.85;
+      ctx.fillStyle = `rgba(245,185,66,${alpha.toFixed(2)})`;
+    }
+    ctx.fillRect(c*cw+1, r*ch+1, cw-2, ch-2);
+  }
+}
+resize();
+
+function poll(){
+  fetch('state.json').then(r=>r.json()).then(s=>{
+    lastActivity = s.kc_activity;
+    draw(lastActivity);
+    document.getElementById('statKC').textContent = s.kc_active;
+    document.getElementById('statApproach').textContent = s.approach.toFixed(2);
+    document.getElementById('statAvoid').textContent = s.avoid.toFixed(2);
+    const maxMbon = Math.max(s.approach, s.avoid, 1);
+    document.getElementById('approachFill').style.width = (s.approach/maxMbon*100).toFixed(0)+'%';
+    document.getElementById('avoidFill').style.width = (s.avoid/maxMbon*100).toFixed(0)+'%';
+  }).catch(()=>{});
+}
+setInterval(poll, 100);
+poll();
+</script>
+</body>
+</html>

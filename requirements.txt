@@ -1,0 +1,43 @@
+# Core numerics
+numpy
+pandas
+pyarrow
+
+# Spiking simulator backend
+# Install a CUDA build instead if you have an NVIDIA GPU:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+# NOTE: on some networks the download.pytorch.org CDN silently truncates/
+# corrupts the ~124MB CPU wheel (pip aborts with a hash mismatch). If that
+# happens, `pip install torch` from plain PyPI gets the same CPU wheel via a
+# different CDN and has been reliable in practice.
+torch
+
+# Mario environment (needs a C/C++ toolchain to build nes-py -- see
+# README.md "Mario environment install notes"; if that's not available,
+# the alternative game environments below need no compiler at all)
+gym-super-mario-bros==7.4.0
+nes-py==8.2.1
+gymnasium
+opencv-python-headless
+
+# Alternative game environments (no compiler needed, verified working):
+# ale-py + AutoROM give 104 real Atari games (Pong, Breakout, ...);
+# flappy-bird-gymnasium is a pure-Python clone, no ROM at all.
+# `AutoROM --accept-license` may fail with a `requests`-library network
+# error in some sandboxes even though the network is fine -- if so, fetch
+# https://gist.githubusercontent.com/jjshoots/61b22aefce4456920ba99f2c36906eda/raw/00046ac3403768bfe45857610a3d333b8e35e026/Roms.tar.gz.b64
+# with plain `urllib` instead, base64-decode it, and extract the tar.gz
+# into AutoROM's `roms/` install directory yourself (see docs/STATUS.md).
+ale-py
+autorom[accept-rom-license]
+flappy-bird-gymnasium
+minigrid
+
+# Utilities
+tqdm
+matplotlib
+pyyaml
+
+# Optional: experiment tracking (pick one)
+tensorboard
+# wandb

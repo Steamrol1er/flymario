@@ -1,0 +1,487 @@
+<title>Fly Plays Platformer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg: #0a0d12;
+    --panel: #12161e;
+    --panel-2: #171c26;
+    --line: #262e3b;
+    --ink: #e7ebf2;
+    --ink-dim: #8a94a6;
+    --ink-faint: #4c5566;
+    --fly: #f5b942;
+    --fly-glow: #ffd684;
+    --good: #4fd9c7;
+    --bad: #ef5da8;
+    --sky-top: #0e2a3a;
+    --sky-bot: #142230;
+    --ground: #2b3648;
+    --ground-top: #3a4a63;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    min-height: 100dvh;
+  }
+  .wrap{ max-width: 1400px; margin: 0 auto; padding-block: 20px 32px; display:flex; flex-direction:column; gap:16px; }
+  header{
+    display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between;
+    gap: 8px 24px; border-bottom: 1px solid var(--line); padding-bottom: 14px;
+  }
+  h1{ font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  h1 span{ color: var(--fly); }
+  .subtitle{ font-size: 0.82rem; color: var(--ink-dim); max-width: 64ch; margin: 4px 0 0; }
+  .badge-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .badge{
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; letter-spacing: 0.02em;
+    color: var(--ink-dim); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+  }
+  .badge b{ color: var(--ink); font-weight: 600; }
+
+  .tabs{ display:flex; gap:6px; flex-wrap:wrap; }
+  .tab{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.74rem;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 8px; padding: 7px 12px; cursor:pointer;
+  }
+  .tab.active{ color: var(--bg); background: var(--fly); border-color: var(--fly); font-weight:600; }
+  .tab .win{ color: var(--good); }
+  .tab.active .win{ color: var(--bg); }
+
+  main{ display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 16px; }
+  @media (max-width: 900px){ main{ grid-template-columns: 1fr; } }
+
+  .stage{
+    position: relative; border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; min-height: 300px; background: var(--sky-bot);
+  }
+  .stage canvas{ display:block; width:100%; height:100%; }
+  .outcome-flag{
+    position:absolute; top:14px; right:16px;
+    font-family:"IBM Plex Mono", monospace; font-size: 0.74rem;
+    padding: 6px 12px; border-radius: 8px;
+    background: rgba(10,13,18,0.65); border: 1px solid var(--line);
+  }
+  .outcome-flag.won{ color: var(--good); border-color: var(--good); }
+  .outcome-flag.dead{ color: var(--bad); border-color: var(--bad); }
+
+  .transport{
+    display:flex; align-items:center; gap: 12px;
+    padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel-2);
+  }
+  .play-btn{
+    width: 34px; height:34px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--bg); color: var(--fly); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex: none; font-size: 0.9rem;
+  }
+  .play-btn:hover{ border-color: var(--fly); }
+  input[type=range]{ flex:1; accent-color: var(--fly); height: 4px; }
+  .t-label{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--ink-dim);
+    min-width: 84px; text-align:right; font-variant-numeric: tabular-nums;
+  }
+
+  aside{ display:flex; flex-direction:column; gap:12px; }
+  .panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .panel h2{
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-faint); margin: 0 0 10px; font-weight: 600;
+  }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size: 0.78rem; color: var(--ink-dim); padding: 3px 0; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .sq{ width:9px; height:9px; flex:none; }
+
+  .buttons-row{ display:flex; gap:6px; margin-top: 4px; }
+  .btn-chip{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.68rem;
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px;
+    color: var(--ink-faint); background: var(--panel-2);
+  }
+  .btn-chip.on{ color: var(--bg); background: var(--fly); border-color: var(--fly); font-weight:600; }
+
+  .stat{ display:flex; justify-content:space-between; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .stat:last-child{ border-bottom:none; }
+  .stat b{ font-family:"IBM Plex Mono", monospace; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .bar{ height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; }
+  .bar > i{ display:block; height:100%; width:0%; transition: width 0.08s linear; }
+  .note{ font-size: 0.76rem; line-height: 1.55; color: var(--ink-dim); }
+  .note b{ color: var(--ink); }
+
+  .curve{ width:100%; height: 90px; display:block; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fly Plays <span>Platformer</span></h1>
+      <p class="subtitle">A real agent, trained with the real dopamine three-factor learning rule, playing an original small game — not the real NES Super Mario Bros (see the note below for why).</p>
+    </div>
+    <div class="badge-row">
+      <span class="badge"><b id="badgeEpisodes">–</b> episodes trained</span>
+      <span class="badge"><b id="badgeWins">–</b> real wins</span>
+      <span class="badge"><b id="badgeWinRate">–</b> win rate</span>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+
+  <main>
+    <div>
+      <div class="stage" id="stage">
+        <canvas id="cv"></canvas>
+        <div class="outcome-flag" id="outcomeFlag"></div>
+      </div>
+      <div class="transport">
+        <button class="play-btn" id="playBtn" aria-label="Pause">⏸</button>
+        <input type="range" id="scrub" min="0" max="1" value="0" step="1">
+        <span class="t-label" id="tLabel">step 0</span>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Legend</h2>
+        <div class="legend-row"><span class="dot" style="background:var(--fly)"></span> the agent</div>
+        <div class="legend-row"><span class="dot" style="background:var(--bad)"></span> patrolling enemy</div>
+        <div class="legend-row"><span class="sq" style="background:var(--ground-top)"></span> obstacle block</div>
+        <div class="legend-row"><span class="sq" style="background:var(--sky-bot)"></span> pit (instant death)</div>
+        <div class="legend-row"><span class="sq" style="background:var(--good)"></span> flag (goal)</div>
+      </div>
+
+      <div class="panel">
+        <h2>This instant</h2>
+        <div class="buttons-row" id="buttonsRow"></div>
+        <div class="stat" style="margin-top:8px;"><span>Value V(s)</span><b id="statValue">0.00</b></div>
+        <div class="bar"><i id="valueFill" style="background:var(--good)"></i></div>
+        <div class="stat" style="margin-top:8px;"><span>Dopamine (|δ|)</span><b id="statDelta">0.00</b></div>
+        <div class="bar"><i id="deltaFill"></i></div>
+        <div class="stat" style="margin-top:8px;"><span>Active KCs</span><b id="statKC">0</b> / <span id="statKCTotal">200</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>Learning curve</h2>
+        <svg class="curve" id="curveSvg" viewBox="0 0 260 90" preserveAspectRatio="none"></svg>
+        <p class="note" style="margin-top:6px;">Tiles reached per episode, real training data, smoothed over 50-episode windows.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Why not real Mario?</h2>
+        <p class="note">
+          <b>gym-super-mario-bros</b>/<b>nes-py</b> need a C++ build toolchain
+          this environment doesn't have, and there's no legal ROM to load
+          even if it did. This is an original game with the same shape of
+          problem — run right, jump gaps and an obstacle, avoid a
+          patrolling enemy, reach a flag — so the real learning code plugs
+          in unchanged.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>What's real vs. simplified</h2>
+        <p class="note">
+          The <b>dopamine three-factor rule</b> and <b>TD actor-critic</b> are
+          the same code used elsewhere in this project. They run on the
+          <b>toy odor→KC→MBON circuit</b>, not the real 138,639-neuron FlyWire
+          connectome — identifying real KC/MBON/dopamine neurons there needs
+          FlyWire Codex annotations this project doesn't have. The agent
+          wins sometimes (real data, shown above) but hasn't converged to
+          reliably solving the level — an honest partial result.
+        </p>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const scrub = document.getElementById('scrub');
+  const playBtn = document.getElementById('playBtn');
+  const tLabel = document.getElementById('tLabel');
+  const tabsEl = document.getElementById('tabs');
+  const outcomeFlag = document.getElementById('outcomeFlag');
+  const buttonsRow = document.getElementById('buttonsRow');
+  const statValue = document.getElementById('statValue');
+  const valueFill = document.getElementById('valueFill');
+  const statDelta = document.getElementById('statDelta');
+  const deltaFill = document.getElementById('deltaFill');
+  const statKC = document.getElementById('statKC');
+  const statKCTotal = document.getElementById('statKCTotal');
+
+  const TILE = 26; // on-screen pixels per tile
+  let data = null, level = null, episodes = [], currentIdx = 0, trace = [];
+  let playing = true, lastT = 0, frameMs = 55;
+
+  const BUTTON_ICONS = { left:'◀', right:'▶', A:'jump', B:'run' };
+
+  // resolve the palette once -- these are static :root tokens, no need to
+  // call getComputedStyle every animation frame (learned from the network-
+  // graph viz's initial perf issue)
+  const palette = {};
+  ['--sky-top','--sky-bot','--ground-top','--ground','--good','--bad','--fly','--fly-glow','--bg','--line']
+    .forEach(name => { palette[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); });
+  function getVar(name){ return palette[name]; }
+
+  function resize(){
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = rect.width * dpr;
+    cv.height = Math.max(rect.height, 260) * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  function inGap(tile){
+    return level.gaps.some(([start,w]) => tile >= start && tile < start+w);
+  }
+  function isObstacle(tile){ return level.obstacles.includes(tile); }
+
+  function drawScene(frame){
+    const rect = stage.getBoundingClientRect();
+    const w = rect.width, h = Math.max(rect.height, 260);
+    // sky
+    const g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0, getVar('--sky-top'));
+    g.addColorStop(1, getVar('--sky-bot'));
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,w,h);
+
+    const groundY = h - 46;
+    const viewportTiles = w / TILE;
+    let camTile = frame.x - viewportTiles*0.32;
+    camTile = Math.max(0, Math.min(camTile, level.length - viewportTiles + 6));
+    const originPx = -camTile * TILE;
+
+    // ground / gaps / obstacles / flag
+    const firstTile = Math.floor(camTile) - 1;
+    const lastTile = Math.ceil(camTile + viewportTiles) + 1;
+    for(let t=firstTile; t<=lastTile; t++){
+      const px = originPx + t*TILE;
+      if(inGap(t)){
+        continue; // pit -- just sky/void showing through
+      }
+      ctx.fillStyle = getVar('--ground-top');
+      ctx.fillRect(px, groundY, TILE+1, 6);
+      ctx.fillStyle = getVar('--ground');
+      ctx.fillRect(px, groundY+6, TILE+1, h-groundY-6);
+      if(isObstacle(t)){
+        ctx.fillStyle = getVar('--ground-top');
+        ctx.fillRect(px+3, groundY-30, TILE-6, 30);
+        ctx.strokeStyle = getVar('--bg');
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px+3, groundY-30, TILE-6, 30);
+      }
+      if(t === level.flag_tile){
+        ctx.strokeStyle = getVar('--good');
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(px+TILE/2, groundY);
+        ctx.lineTo(px+TILE/2, groundY-70);
+        ctx.stroke();
+        ctx.fillStyle = getVar('--good');
+        ctx.beginPath();
+        ctx.moveTo(px+TILE/2, groundY-70);
+        ctx.lineTo(px+TILE/2+18, groundY-62);
+        ctx.lineTo(px+TILE/2, groundY-54);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // enemy
+    const ex = originPx + frame.enemy_x*TILE;
+    const ey = groundY - 9;
+    ctx.fillStyle = getVar('--bad');
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, 9, 8, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = getVar('--bg');
+    ctx.beginPath(); ctx.arc(ex-3, ey-1, 1.6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ex+3, ey-1, 1.6, 0, Math.PI*2); ctx.fill();
+
+    // the fly (player)
+    const px2 = originPx + frame.x*TILE;
+    const py2 = groundY - frame.y*TILE - 8;
+    drawFly(px2, py2, frame.airborne);
+
+    if(frame.dead){
+      ctx.save();
+      ctx.globalAlpha = 0.15 + 0.1*Math.sin(Date.now()/80);
+      ctx.fillStyle = getVar('--bad');
+      ctx.fillRect(0,0,w,h);
+      ctx.restore();
+    }
+  }
+
+  function drawFly(x, y, airborne){
+    ctx.save();
+    ctx.translate(x, y);
+    const wingPhase = (Date.now()/40) % (Math.PI*2);
+    const wingLift = airborne ? 6 : 3 + Math.sin(wingPhase)*2;
+    ctx.fillStyle = 'rgba(245,185,66,0.35)';
+    ctx.beginPath(); ctx.ellipse(-3, -wingLift, 7, 3.2, -0.4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3, -wingLift, 7, 3.2, 0.4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = getVar('--fly');
+    ctx.beginPath(); ctx.ellipse(0, 0, 7, 5.5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = getVar('--fly-glow');
+    ctx.beginPath(); ctx.ellipse(-3, -2, 2.6, 2.2, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function frameAt(i){
+    const s = trace[Math.min(i, trace.length-1)];
+    const dead = i === trace.length-1 && !!episodes[currentIdx].dead;
+    return {
+      x: s.x, y: s.y, enemy_x: s.enemy_x, airborne: s.y > 0.1,
+      action: s.action, value: s.value, delta: s.dopamine_delta,
+      kc: s.kc_active, dead,
+    };
+  }
+
+  function applyStep(i){
+    const f = frameAt(i);
+    drawScene(f);
+    tLabel.textContent = `step ${i}`;
+
+    buttonsRow.innerHTML = '';
+    ['left','right','B','A'].forEach(b=>{
+      const chip = document.createElement('span');
+      chip.className = 'btn-chip' + (f.action.includes(b) ? ' on' : '');
+      chip.textContent = b === 'A' ? 'jump' : b === 'B' ? 'run' : b;
+      buttonsRow.appendChild(chip);
+    });
+
+    statValue.textContent = f.value.toFixed(2);
+    const vNorm = Math.max(0, Math.min((f.value+0.2)/1.5, 1));
+    valueFill.style.width = (vNorm*100).toFixed(0)+'%';
+
+    statDelta.textContent = Math.abs(f.delta).toFixed(2);
+    deltaFill.style.background = f.delta >= 0 ? getVar('--good') : getVar('--bad');
+    deltaFill.style.width = (Math.min(Math.abs(f.delta)/0.5,1)*100).toFixed(0)+'%';
+
+    statKC.textContent = f.kc;
+
+    if(i >= trace.length-1){
+      const ep = episodes[currentIdx];
+      outcomeFlag.style.display = 'block';
+      outcomeFlag.className = 'outcome-flag ' + (ep.won ? 'won' : ep.dead ? 'dead' : '');
+      outcomeFlag.textContent = ep.won
+        ? `reached the flag — tile ${ep.final_tile}/${level.flag_tile}`
+        : ep.dead
+          ? `died — tile ${ep.final_tile}/${level.flag_tile}`
+          : `ran out of time — tile ${ep.final_tile}/${level.flag_tile}`;
+    } else {
+      outcomeFlag.style.display = 'none';
+    }
+  }
+
+  function draw(){ if(trace.length) applyStep(parseInt(scrub.value,10)); }
+
+  function tick(ts){
+    if(!lastT) lastT = ts;
+    if(playing && ts - lastT >= frameMs){
+      lastT = ts;
+      let v = parseInt(scrub.value,10) + 1;
+      if(v >= trace.length) v = 0;
+      scrub.value = v;
+      draw();
+    } else {
+      // keep the fly's idle wing animation alive even while paused/held on a frame
+      draw();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function selectEpisode(idx){
+    currentIdx = idx;
+    trace = episodes[idx].trace;
+    scrub.max = trace.length - 1;
+    scrub.value = 0;
+    [...tabsEl.children].forEach((el,i)=> el.classList.toggle('active', i===idx));
+    draw();
+  }
+
+  function buildTabs(){
+    tabsEl.innerHTML = '';
+    episodes.forEach((ep, i)=>{
+      const tab = document.createElement('div');
+      tab.className = 'tab';
+      tab.innerHTML = ep.label + (ep.won ? ' <span class="win">— won ✓</span>' : '');
+      tab.addEventListener('click', ()=> selectEpisode(i));
+      tabsEl.appendChild(tab);
+    });
+  }
+
+  function buildCurve(history){
+    const svg = document.getElementById('curveSvg');
+    const win = 50;
+    const pts = [];
+    for(let i=0; i<history.length; i+=win){
+      const chunk = history.slice(i, i+win);
+      const avg = chunk.reduce((a,h)=>a+h.final_tile,0) / chunk.length;
+      pts.push(avg);
+    }
+    const maxV = level.flag_tile;
+    const W = 260, H = 90, pad = 4;
+    const stepX = (W - pad*2) / Math.max(pts.length-1,1);
+    const path = pts.map((v,i)=>{
+      const x = pad + i*stepX;
+      const y = H - pad - (v/maxV)*(H-pad*2);
+      return `${i===0?'M':'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const flagY = H - pad - (maxV/maxV)*(H-pad*2);
+    svg.innerHTML = `
+      <line x1="${pad}" y1="${flagY.toFixed(1)}" x2="${W-pad}" y2="${flagY.toFixed(1)}" stroke="${getVar('--line')}" stroke-dasharray="2,2"/>
+      <path d="${path}" fill="none" stroke="${getVar('--fly')}" stroke-width="2"/>
+    `;
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    playing = !playing;
+    playBtn.textContent = playing ? '⏸' : '▶';
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    lastT = 0;
+  });
+  scrub.addEventListener('input', ()=>{
+    playing = false;
+    playBtn.textContent = '▶';
+    playBtn.setAttribute('aria-label','Play');
+    draw();
+  });
+
+  fetch('platformer_run.json').then(r=>r.json()).then(json=>{
+    data = json;
+    level = data.level;
+    statKCTotal.textContent = data.n_kc;
+    document.getElementById('badgeEpisodes').textContent = data.history.length.toLocaleString();
+    const wins = data.history.filter(h=>h.won).length;
+    document.getElementById('badgeWins').textContent = wins;
+    document.getElementById('badgeWinRate').textContent = (wins/data.history.length*100).toFixed(1) + '%';
+
+    episodes = [
+      { label: `Before training (ep ${data.early_episode.ep ?? 0})`, ...data.early_episode },
+      { label: `Best run observed (ep ${data.best_episode.ep})`, ...data.best_episode },
+      { label: `Typical, late in training`, ...data.late_episode },
+    ];
+    buildTabs();
+    buildCurve(data.history);
+    resize();
+    selectEpisode(1); // open on the best/winning run
+    requestAnimationFrame(tick);
+  }).catch(err=>{
+    ctx.fillStyle = '#e7ebf2';
+    ctx.font = '14px monospace';
+    ctx.fillText('Could not load platformer_run.json: ' + err, 20, 30);
+  });
+})();
+</script>

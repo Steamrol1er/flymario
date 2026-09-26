@@ -1,0 +1,388 @@
+<title>Fly Brain 3D</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg: #0a0d12;
+    --panel: #12161e;
+    --panel-2: #171c26;
+    --line: #262e3b;
+    --ink: #e7ebf2;
+    --ink-dim: #8a94a6;
+    --ink-faint: #4c5566;
+    --accent: #ef5da8;
+    --accent-soft: rgba(239,93,168,0.5);
+    --shell: #3a4a63;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    min-height: 100dvh;
+  }
+  .wrap{
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-block: 20px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  header{
+    display:flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+  }
+  h1{ font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  h1 span{ color: var(--accent); }
+  .subtitle{ font-size: 0.82rem; color: var(--ink-dim); max-width: 62ch; margin: 4px 0 0; }
+  .badge-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .badge{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem; letter-spacing: 0.02em;
+    color: var(--ink-dim);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .badge b{ color: var(--ink); font-weight: 600; }
+
+  main{ display: grid; grid-template-columns: minmax(0,1fr) 260px; gap: 16px; }
+  @media (max-width: 860px){ main{ grid-template-columns: 1fr; } }
+
+  .stage{
+    position: relative;
+    background: radial-gradient(120% 140% at 50% 20%, #131a24 0%, var(--panel) 55%, #0d1119 100%);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    min-height: 460px;
+    cursor: grab;
+  }
+  .stage:active{ cursor: grabbing; }
+  .stage canvas{ display:block; width:100%; height:100%; }
+  .hint{
+    position:absolute; bottom:10px; left:0; right:0;
+    text-align:center;
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    pointer-events:none;
+  }
+  .region-tag{
+    position:absolute; top:14px; left:16px;
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: rgba(10,13,18,0.6);
+    border: 1px solid var(--accent-soft);
+    border-radius: 8px;
+    padding: 6px 10px;
+    line-height: 1.5;
+  }
+  .region-tag b{ display:block; color: var(--ink); font-size: 0.78rem; }
+
+  .transport{
+    display:flex; align-items:center; gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--panel-2);
+  }
+  .play-btn{
+    width: 34px; height:34px; border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--bg); color: var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex: none; font-size: 0.9rem;
+  }
+  .play-btn:hover{ border-color: var(--accent); }
+  input[type=range]{ flex:1; accent-color: var(--accent); height: 4px; }
+  .t-label{
+    font-family:"IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--ink-dim);
+    min-width: 90px; text-align:right; font-variant-numeric: tabular-nums;
+  }
+
+  aside{ display:flex; flex-direction:column; gap:12px; }
+  .panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .panel h2{
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-faint); margin: 0 0 10px; font-weight: 600;
+  }
+  .legend-row{ display:flex; align-items:center; gap:8px; font-size: 0.78rem; color: var(--ink-dim); padding: 3px 0; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .stat{
+    display:flex; justify-content:space-between; font-size: 0.8rem;
+    padding: 4px 0; border-bottom: 1px dashed var(--line);
+  }
+  .stat:last-child{ border-bottom:none; }
+  .stat b{ font-family:"IBM Plex Mono", monospace; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .note{ font-size: 0.76rem; line-height: 1.55; color: var(--ink-dim); }
+  .note b{ color: var(--ink); }
+  .spikebar{
+    height: 6px; border-radius: 3px; background: var(--line);
+    overflow: hidden; margin-top: 6px;
+  }
+  .spikebar > i{
+    display:block; height:100%; background: var(--accent);
+    width: 0%; transition: width 0.08s linear;
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fly Brain <span>3D</span></h1>
+      <p class="subtitle">Real adult <i>Drosophila</i> brain anatomy, with the region driven by this experiment highlighted and pulsing to real simulated spike counts.</p>
+    </div>
+    <div class="badge-row">
+      <span class="badge">JFRC2 template surface</span>
+      <span class="badge">CC BY 4.0, VirtualFlyBrain</span>
+    </div>
+  </header>
+
+  <main>
+    <div>
+      <div class="stage" id="stage">
+        <div class="region-tag">Highlighted region<b id="regionName">Gnathal ganglion (GNG)</b></div>
+        <canvas id="cv"></canvas>
+        <div class="hint">drag to rotate · scroll to zoom</div>
+      </div>
+      <div class="transport">
+        <button class="play-btn" id="playBtn" aria-label="Pause">⏸</button>
+        <input type="range" id="scrub" min="0" max="29" value="0" step="1">
+        <span class="t-label" id="tLabel">0 – 10 ms</span>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Legend</h2>
+        <div class="legend-row"><span class="dot" style="background:var(--shell)"></span> whole-brain neuropil surface</div>
+        <div class="legend-row"><span class="dot" style="background:var(--accent)"></span> GNG — active region, this experiment</div>
+      </div>
+
+      <div class="panel">
+        <h2>Live network activity</h2>
+        <div class="stat"><span>Spikes in this bin</span><b id="statSpikes">0</b></div>
+        <div class="spikebar"><i id="spikeFill"></i></div>
+        <p class="note" style="margin-top:10px;">Bar height is the real, per-10ms spike count summed over the 396 neurons that fired in the sugar→MN9 simulation (see the network view for the same run at neuron resolution).</p>
+      </div>
+
+      <div class="panel">
+        <h2>Why this region</h2>
+        <p class="note">
+          The <b>gnathal ganglion (GNG)</b> — the modern name for what was
+          called the subesophageal zone — is where gustatory (taste/sugar)
+          sensory afferents arrive and where feeding premotor and motor
+          circuits, including <b>MN9</b>, sit. That anatomical fact comes from
+          the published fly neuroanatomy literature, not from this
+          simulation.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>What's real vs. approximate</h2>
+        <p class="note">
+          The brain surface and GNG geometry are a <b>real public 3D
+          reconstruction</b> (VirtualFlyBrain's JFRC2 template domains). The
+          pulse timing is <b>real simulated activity</b> from the same LIF run
+          as the network view. What's <b>not</b> shown here: exactly which of
+          the 396 active neurons sit inside this mesh — that needs FlyWire's
+          own 3D coordinates, which require Codex account access this project
+          doesn't have yet (see docs/STATUS.md). The network-graph view shows
+          those individual neurons instead, without real 3D placement.
+        </p>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
+  const scrub = document.getElementById('scrub');
+  const playBtn = document.getElementById('playBtn');
+  const tLabel = document.getElementById('tLabel');
+  const statSpikes = document.getElementById('statSpikes');
+  const spikeFill = document.getElementById('spikeFill');
+
+  let playing = true, lastT = 0, frameMs = 160;
+  let timeline = { bin_ms: 10, total_spikes_per_bin: [0] };
+  let maxSpikes = 1;
+
+  function buildGeometry(meshData){
+    const geo = new THREE.BufferGeometry();
+    const verts = new Float32Array(meshData.vertices.length * 3);
+    meshData.vertices.forEach((v, i) => { verts[i*3]=v[0]; verts[i*3+1]=v[1]; verts[i*3+2]=v[2]; });
+    const idx = new Uint32Array(meshData.faces.length * 3);
+    meshData.faces.forEach((f, i) => { idx[i*3]=f[0]; idx[i*3+1]=f[1]; idx[i*3+2]=f[2]; });
+    geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  // --- three.js scene ---
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 100);
+  const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+
+  scene.add(new THREE.AmbientLight(0x8899bb, 0.9));
+  const key = new THREE.DirectionalLight(0xffffff, 0.9);
+  key.position.set(2, 3, 4);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x5577ff, 0.4);
+  rim.position.set(-3, -2, -3);
+  scene.add(rim);
+
+  let shellMesh, gngMesh, gngMat;
+
+  function initMeshes(data){
+    const shellGeo = buildGeometry(data.whole_brain);
+    const shellMat = new THREE.MeshPhongMaterial({
+      color: 0x3a4a63, transparent: true, opacity: 0.16,
+      side: THREE.DoubleSide, depthWrite: false, shininess: 20,
+    });
+    shellMesh = new THREE.Mesh(shellGeo, shellMat);
+    scene.add(shellMesh);
+
+    const shellWire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(shellGeo),
+      new THREE.LineBasicMaterial({ color: 0x3a4a63, transparent: true, opacity: 0.18 })
+    );
+    scene.add(shellWire);
+
+    const gngGeo = buildGeometry(data.gng);
+    gngMat = new THREE.MeshPhongMaterial({
+      color: 0xef5da8, emissive: 0xef5da8, emissiveIntensity: 0.6,
+      transparent: true, opacity: 0.92, shininess: 40,
+    });
+    gngMesh = new THREE.Mesh(gngGeo, gngMat);
+    scene.add(gngMesh);
+  }
+
+  // simple drag-to-orbit + scroll-to-zoom (no external controls library)
+  let radius = 3.2, theta = 0.6, phi = 1.15; // spherical coords around origin
+  let dragging = false, lastX = 0, lastY = 0;
+  function updateCamera(){
+    camera.position.set(
+      radius * Math.sin(phi) * Math.cos(theta),
+      radius * Math.cos(phi),
+      radius * Math.sin(phi) * Math.sin(theta)
+    );
+    camera.lookAt(0,0,0);
+  }
+  stage.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+  window.addEventListener('mouseup', ()=> dragging=false);
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    const dx = e.clientX-lastX, dy = e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    theta -= dx * 0.006;
+    phi = Math.min(Math.max(phi - dy*0.006, 0.15), Math.PI-0.15);
+    updateCamera();
+  });
+  stage.addEventListener('touchstart', e=>{ const t=e.touches[0]; dragging=true; lastX=t.clientX; lastY=t.clientY; }, {passive:true});
+  window.addEventListener('touchend', ()=> dragging=false);
+  window.addEventListener('touchmove', e=>{
+    if(!dragging) return;
+    const t=e.touches[0];
+    const dx=t.clientX-lastX, dy=t.clientY-lastY;
+    lastX=t.clientX; lastY=t.clientY;
+    theta -= dx*0.006;
+    phi = Math.min(Math.max(phi-dy*0.006, 0.15), Math.PI-0.15);
+    updateCamera();
+  }, {passive:true});
+  stage.addEventListener('wheel', e=>{
+    e.preventDefault();
+    radius = Math.min(Math.max(radius + e.deltaY*0.0025, 1.2), 8);
+    updateCamera();
+  }, {passive:false});
+
+  function resize(){
+    const rect = stage.getBoundingClientRect();
+    renderer.setSize(rect.width, rect.height, false);
+    camera.aspect = rect.width / Math.max(rect.height,1);
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+
+  function applyBin(bin){
+    const spikes = timeline.total_spikes_per_bin[bin] || 0;
+    const norm = Math.min(spikes / maxSpikes, 1);
+    if(gngMat){
+      gngMat.emissiveIntensity = 0.35 + norm * 1.3;
+      const s = 1 + norm * 0.02;
+      gngMesh.scale.set(s,s,s);
+    }
+    statSpikes.textContent = spikes;
+    spikeFill.style.width = (norm*100).toFixed(0) + '%';
+    tLabel.textContent = `${bin*timeline.bin_ms} – ${bin*timeline.bin_ms + timeline.bin_ms} ms`;
+  }
+
+  function render(){
+    renderer.render(scene, camera);
+  }
+
+  function tick(ts){
+    if(!lastT) lastT = ts;
+    if(playing && ts - lastT >= frameMs){
+      lastT = ts;
+      let v = parseInt(scrub.value,10) + 1;
+      if(v > parseInt(scrub.max,10)) v = 0;
+      scrub.value = v;
+      applyBin(v);
+    }
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  scrub.addEventListener('input', ()=>{
+    playing = false;
+    playBtn.textContent = '▶';
+    playBtn.setAttribute('aria-label','Play');
+    applyBin(parseInt(scrub.value,10));
+  });
+  playBtn.addEventListener('click', ()=>{
+    playing = !playing;
+    playBtn.textContent = playing ? '⏸' : '▶';
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    lastT = 0;
+  });
+
+  updateCamera();
+  resize();
+
+  Promise.all([
+    fetch('brain_mesh.json').then(r=>r.json()),
+    fetch('activity_timeline.json').then(r=>r.json()),
+  ]).then(([meshData, tl])=>{
+    initMeshes(meshData);
+    timeline = tl;
+    maxSpikes = Math.max(...tl.total_spikes_per_bin, 1);
+    scrub.max = tl.total_spikes_per_bin.length - 1;
+    applyBin(0);
+    requestAnimationFrame(tick);
+  }).catch(err=>{
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#e7ebf2';
+    ctx.font = '14px monospace';
+    ctx.fillText('Could not load brain data: ' + err, 20, 30);
+  });
+})();
+</script>

@@ -1,0 +1,252 @@
+<title>Fly Plays Pong</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg: #0a0d12;
+    --panel: #12161e;
+    --line: #262e3b;
+    --ink: #e7ebf2;
+    --ink-dim: #8a94a6;
+    --fly: #f5b942;
+    --good: #4fd9c7;
+    --bad: #ef5da8;
+    font-family: "IBM Plex Mono", monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background: var(--bg); color: var(--ink);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    min-height: 100dvh;
+  }
+  .wrap{ max-width: 1100px; margin: 0 auto; padding-block: 20px 28px; display:flex; flex-direction:column; gap:14px; }
+  h1{ font-size: 1.1rem; margin: 0 0 2px; font-weight:600; }
+  h1 span{ color: var(--fly); }
+
+  .game{
+    background:#000; border-radius: 10px; border: 1px solid var(--line);
+    aspect-ratio: 160/210; max-height: 70vh; margin: 0 auto; width: 100%; max-width: 560px;
+  }
+  .game canvas{ display:block; width:100%; height:100%; }
+
+  .transport{
+    display:flex; align-items:center; gap: 10px; max-width: 560px; width:100%; margin: 0 auto;
+  }
+  .play-btn{
+    width: 30px; height:30px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--panel); color: var(--fly); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex: none; font-size: 0.85rem;
+  }
+  input[type=range]{ flex:1; accent-color: var(--fly); height: 4px; }
+  .t-label{ font-size: 0.7rem; color: var(--ink-dim); min-width: 60px; text-align:right; }
+
+  .lower{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px){ .lower{ grid-template-columns: 1fr; } }
+
+  .panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .panel h2{ font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-dim); margin: 0 0 8px; }
+  .row{ display:flex; justify-content:space-between; font-size: 0.72rem; padding: 3px 0; }
+  .row b{ color: var(--ink); }
+  .bar{ height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 4px; }
+  .bar>i{ display:block; height:100%; width:0%; }
+
+  .brain3d{ aspect-ratio: 4/3; }
+  .brain3d canvas{ display:block; width:100%; height:100%; }
+</style>
+
+<div class="wrap">
+  <h1>Fly Plays <span>Pong</span></h1>
+
+  <div class="game"><canvas id="cv"></canvas></div>
+
+  <div class="transport">
+    <button class="play-btn" id="playBtn">⏸</button>
+    <input type="range" id="scrub" min="0" max="1" value="0" step="1">
+    <span class="t-label" id="tLabel">0</span>
+  </div>
+
+  <div class="lower">
+    <div class="panel">
+      <h2>Brain</h2>
+      <div class="row"><span>Active KCs</span><b id="statKC">0</b></div>
+      <div class="row"><span>Value V(s)</span><b id="statValue">0.00</b></div>
+      <div class="bar"><i id="valueFill" style="background:var(--good)"></i></div>
+      <div class="row"><span>Dopamine |δ|</span><b id="statDelta">0.00</b></div>
+      <div class="bar"><i id="deltaFill"></i></div>
+      <div class="row"><span>Action</span><b id="statAction">-</b></div>
+    </div>
+    <div class="panel brain3d"><canvas id="fly3d"></canvas></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const scrub = document.getElementById('scrub');
+  const playBtn = document.getElementById('playBtn');
+  const tLabel = document.getElementById('tLabel');
+  const statKC = document.getElementById('statKC');
+  const statValue = document.getElementById('statValue');
+  const valueFill = document.getElementById('valueFill');
+  const statDelta = document.getElementById('statDelta');
+  const deltaFill = document.getElementById('deltaFill');
+  const statAction = document.getElementById('statAction');
+
+  let trace = [], playing = true, lastT = 0, frameMs = 45;
+  const W = 160, H = 210; // native Atari Pong resolution
+
+  function resizeGame(){
+    const rect = cv.parentElement.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = rect.width * dpr;
+    cv.height = rect.height * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  window.addEventListener('resize', resizeGame);
+
+  function drawGame(f){
+    const rect = cv.parentElement.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const sx = w / W, sy = h / H;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,w,h);
+    // center dashed line
+    ctx.strokeStyle = '#444';
+    ctx.setLineDash([4,6]);
+    ctx.beginPath(); ctx.moveTo(w/2,0); ctx.lineTo(w/2,h); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#fff';
+    const paddleH = 24*sy, paddleW = 4*sx;
+    // enemy (left)
+    ctx.fillRect(8*sx, f.enemy_y*sy, paddleW, paddleH);
+    // player (right)
+    ctx.fillRect(w - 12*sx, f.player_y*sy, paddleW, paddleH);
+    // ball
+    ctx.fillRect(f.ball_x*sx, f.ball_y*sy, 3*sx, 5*sy);
+  }
+
+  function draw(){
+    if(!trace.length) return;
+    const i = parseInt(scrub.value,10);
+    const s = trace[Math.min(i, trace.length-1)];
+    drawGame(s);
+    tLabel.textContent = i;
+    statKC.textContent = s.kc_active;
+    statValue.textContent = s.value.toFixed(2);
+    valueFill.style.width = (Math.max(0,Math.min((s.value+1)/6,1))*100).toFixed(0)+'%';
+    statDelta.textContent = Math.abs(s.dopamine_delta).toFixed(2);
+    deltaFill.style.background = s.dopamine_delta >= 0 ? 'var(--good)' : 'var(--bad)';
+    deltaFill.style.width = (Math.min(Math.abs(s.dopamine_delta)/1,1)*100).toFixed(0)+'%';
+    statAction.textContent = s.action;
+    updateFly(s.action);
+  }
+
+  function tick(ts){
+    if(!lastT) lastT = ts;
+    if(playing && ts-lastT >= frameMs){
+      lastT = ts;
+      let v = parseInt(scrub.value,10)+1;
+      if(v >= trace.length) v = 0;
+      scrub.value = v;
+    }
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    playing = !playing;
+    playBtn.textContent = playing ? '⏸' : '▶';
+    lastT = 0;
+  });
+  scrub.addEventListener('input', ()=>{ playing=false; playBtn.textContent='▶'; draw(); });
+
+  // ---- 3D fly pressing UP/DOWN buttons ----
+  const flyCv = document.getElementById('fly3d');
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
+  camera.position.set(2.4, 2.2, 3.2);
+  camera.lookAt(0,0.3,0);
+  const renderer = new THREE.WebGLRenderer({ canvas: flyCv, antialias: true, alpha: true });
+  scene.add(new THREE.AmbientLight(0x8899bb, 1.0));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(2,3,2); scene.add(dl);
+
+  // buttons
+  const btnGeo = new THREE.BoxGeometry(0.8, 0.25, 0.6);
+  const upMat = new THREE.MeshPhongMaterial({ color: 0x262e3b });
+  const downMat = new THREE.MeshPhongMaterial({ color: 0x262e3b });
+  const upBtn = new THREE.Mesh(btnGeo, upMat); upBtn.position.set(-0.55, 0, 0);
+  const downBtn = new THREE.Mesh(btnGeo, downMat); downBtn.position.set(0.55, 0, 0);
+  scene.add(upBtn, downBtn);
+
+  // fly: body + head + wings + one "leg" that presses
+  const fly = new THREE.Group();
+  const bodyMat = new THREE.MeshPhongMaterial({ color: 0xf5b942 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), bodyMat);
+  body.scale.set(1,0.8,1.3);
+  fly.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18,12,12), bodyMat);
+  head.position.set(0,0.05,0.45);
+  fly.add(head);
+  const wingMat = new THREE.MeshPhongMaterial({ color: 0xffd684, transparent:true, opacity:0.5 });
+  const wingGeo = new THREE.SphereGeometry(0.28,10,10);
+  const wingL = new THREE.Mesh(wingGeo, wingMat); wingL.scale.set(1,0.1,0.5); wingL.position.set(-0.3,0.25,-0.1);
+  const wingR = new THREE.Mesh(wingGeo, wingMat); wingR.scale.set(1,0.1,0.5); wingR.position.set(0.3,0.25,-0.1);
+  fly.add(wingL, wingR);
+  const legMat = new THREE.MeshPhongMaterial({ color: 0x2a2015 });
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.5,8), legMat);
+  leg.position.set(0, -0.35, 0);
+  fly.add(leg);
+  fly.position.set(0, 1.1, 0);
+  scene.add(fly);
+
+  function resizeFly(){
+    const rect = flyCv.getBoundingClientRect();
+    renderer.setSize(rect.width, rect.height, false);
+    camera.aspect = rect.width/Math.max(rect.height,1);
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resizeFly);
+
+  let targetX = 0, targetLegY = -0.35, targetGlowUp = 0, targetGlowDown = 0;
+  function updateFly(action){
+    // RIGHT/RIGHTFIRE move the paddle up (decrease y) -> "UP" button (left position)
+    // LEFT/LEFTFIRE move the paddle down (increase y) -> "DOWN" button (right position)
+    if(action === 'RIGHT' || action === 'RIGHTFIRE'){ targetX = -0.55; targetLegY = -0.05; targetGlowUp=1; targetGlowDown=0; }
+    else if(action === 'LEFT' || action === 'LEFTFIRE'){ targetX = 0.55; targetLegY = -0.05; targetGlowUp=0; targetGlowDown=1; }
+    else { targetX = 0; targetLegY = -0.35; targetGlowUp=0; targetGlowDown=0; }
+  }
+
+  function animateFly(ts){
+    fly.position.x += (targetX - fly.position.x) * 0.15;
+    leg.position.y += (targetLegY - leg.position.y) * 0.25;
+    const wobble = Math.sin(ts/150) * 0.05;
+    fly.position.y = 1.1 + wobble;
+    const wp = (Math.sin(ts/60)+1)/2 * 0.15 + 0.05;
+    wingL.rotation.z = wp; wingR.rotation.z = -wp;
+    upMat.emissive.setHex(0x000000); downMat.emissive.setHex(0x000000);
+    upMat.color.setHex(0x262e3b); downMat.color.setHex(0x262e3b);
+    if(targetGlowUp) upMat.color.setHex(0x4fd9c7);
+    if(targetGlowDown) downMat.color.setHex(0x4fd9c7);
+    renderer.render(scene, camera);
+    requestAnimationFrame(animateFly);
+  }
+
+  fetch('pong_run.json').then(r=>r.json()).then(json=>{
+    trace = json.best_episode.trace;
+    scrub.max = trace.length - 1;
+    resizeGame();
+    resizeFly();
+    requestAnimationFrame(tick);
+    requestAnimationFrame(animateFly);
+  }).catch(err=>{
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px monospace';
+    ctx.fillText('Could not load pong_run.json: ' + err, 10, 20);
+  });
+})();
+</script>
