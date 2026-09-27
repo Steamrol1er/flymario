@@ -67,6 +67,24 @@ class ActorCriticParams:
     # removes that structural bias without touching the critic's learning.
     normalize_advantage: bool = False
     advantage_ema: float = 0.99  # decay for the running mean/var estimate
+    # Opt-in (default off, same reasoning as normalize_advantage above) real
+    # policy-gradient eligibility trace, replacing the original ad hoc rule.
+    # The original rule only ever credited the KC activity that was present
+    # when an action was taken (`actor_eligibility[:, action] += kc_spikes`)
+    # to that action's own column -- it never adjusted for the fact that
+    # reinforcing one action under a softmax should also *discourage* the
+    # others in proportion to how likely they were. The correct eligibility-
+    # trace actor-critic update (Sutton & Barto, "Reinforcement Learning",
+    # 2nd ed., section 13.5) uses the softmax's actual score function,
+    # grad_logits = one_hot(action) - probs, so:
+    #   e <- trace_decay * e + kc_spikes (outer) grad_logits
+    # instead of crediting only the taken action's column with the raw
+    # (un-mixed) activity. This is what act() below does when this flag is
+    # on. It changes the actor's learning dynamics (not just its scale, the
+    # way normalize_advantage does), so it's opt-in rather than a universal
+    # replacement -- existing tuned scripts (platformer, flappybird) keep
+    # their original behavior unless they explicitly turn this on.
+    policy_gradient: bool = False
 
 
 class ActorCritic:
@@ -113,7 +131,15 @@ class ActorCritic:
 
         # actor eligibility: credit this (kc, action) pair, decay others
         self.actor_eligibility.mul_(self.params.trace_decay)
-        self.actor_eligibility[:, action] += kc_spikes
+        if self.params.policy_gradient:
+            # real softmax score function: reinforcing the taken action
+            # also proportionally discourages the others, not just leaves
+            # their columns untouched (see ActorCriticParams.policy_gradient)
+            grad_logits = -probs.clone()
+            grad_logits[action] += 1.0
+            self.actor_eligibility += torch.outer(kc_spikes, grad_logits)
+        else:
+            self.actor_eligibility[:, action] += kc_spikes
 
         self._last_kc = kc_spikes
         self._last_action = action

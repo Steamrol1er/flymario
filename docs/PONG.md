@@ -232,15 +232,47 @@ A real, measurable improvement, and the early freeze was less complete
 with the network now having a genuinely useful signal it lacked before,
 not just noise. **Still below the ~5% random-policy baseline overall.**
 Giving the network velocity information helped; it did not resolve the
-underlying credit-assignment limitation described above. Other candidates
-that were considered but not (yet) tried, ranked by expected value: a
-proper policy-gradient update (replacing the current ad hoc
-`eligibility * delta` rule with the real log-probability gradient), a real
-experience replay buffer with batched updates, and -- flagged explicitly
-because it trades away the "no hand-crafted features" principle this file
-otherwise holds to -- hand-selecting the handful of RAM bytes that
-actually matter instead of feeding the random projection all 128 (mostly
-irrelevant: score digits, timers, etc.) at once.
+underlying credit-assignment limitation described above.
+
+### Proper policy gradient: tried, made things worse, reverted
+
+The original actor update (`actor_w += eta * delta * eligibility`, with
+`eligibility[:, action] += kc_spikes`) only ever credited the KC activity
+present when an action was taken to that action's own column -- it never
+adjusted the other actions' logits the way a real softmax policy gradient
+does. The textbook-correct eligibility-trace actor-critic update (Sutton &
+Barto, *Reinforcement Learning*, 2nd ed., section 13.5) uses the softmax's
+actual score function, `grad_logits = one_hot(action) - probs`, so
+reinforcing one action also proportionally discourages the others.
+Implemented as `learning/actor.py::ActorCriticParams.policy_gradient`
+(opt-in, default off).
+
+A short diagnostic (500 episodes, batches of 50) looked genuinely
+healthier: `actor_w` grew smoothly and stayed well inside its clamp bounds
+(max magnitude ~1.4 against a ±3 limit) instead of the old rule's
+near-instant saturation. **That result did not hold up at full scale.**
+The matched 2,000,000-step run: 24.0 minutes (vs. 6.7 for the
+frame-stacking-only run -- the outer-product update costs more per step),
+and it froze almost immediately (by episode ~250) and *never recovered*:
+
+| | Frame stacking only | + proper policy gradient |
+|---|---|---|
+| Overall score rate | **2.56% (188/7,339)** | 0.013% (1/7,806) |
+| Frozen-checkpoint fraction | ~1 in 5 of progress checkpoints | 187 of 194 (96%) |
+| Wall clock (2M steps) | 6.7 min | 24.0 min |
+
+**Reverted** (`policy_gradient=True` removed from both
+`experiments/train_pong.py` and `live/server.py`; the code stays in
+`learning/actor.py`, opt-in and off, since it's a real, documented,
+tested-and-rejected result worth keeping rather than a live option to
+leave on). Read as: a more theoretically correct update rule is not
+automatically a better one for this specific (small, linear, online,
+eligibility-trace-based) setup -- the added coupling between actions'
+logits, which is exactly what makes it "correct," appears to have made it
+easier to lock into a self-reinforcing bad policy here rather than harder.
+Whether that's specific to this architecture, this environment, or these
+hyperparameters isn't established by one run; it's reported as what
+actually happened, not diagnosed further.
 
 ## Live local demo (not a precomputed replay)
 

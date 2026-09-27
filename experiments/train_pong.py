@@ -182,6 +182,12 @@ def main():
             gamma=0.97, eta_actor=0.05, trace_decay=0.7, da_gain=1.5,
             w_min=-3.0, w_max=3.0,
             normalize_advantage=True,  # the fix from docs/STATUS.md's FlappyBird finding
+            # policy_gradient=True was tried and reverted -- see docs/PONG.md's
+            # "proper policy gradient: tried, reverted" section. It looked
+            # healthier in a short diagnostic but froze almost immediately and
+            # never recovered over a full matched 2M-step run (1/7,806 scored,
+            # 0.013%, vs. 2.56% without it) -- worse than either prior version,
+            # not better. Left off.
         ),
     )
     ram_to_kc = RamToKC(n_in=128 * N_FRAME_STACK, n_kc=n_kc)

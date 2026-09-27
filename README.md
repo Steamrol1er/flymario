@@ -209,8 +209,16 @@ different scales:
   improvement over the un-stacked run, and the early freeze was less
   complete (1.13% in the first ~1,500 episodes instead of exactly 0%).
   Still below the ~5% random baseline. A genuine fix for a real
-  information gap, not a full solution — see `docs/PONG.md` for the full
-  account and what's likely worth trying next.
+  information gap, kept.
+- **Same again, plus a textbook-correct policy-gradient actor update**
+  (tried because the original update never adjusted for the fact that
+  reinforcing one action under a softmax should discourage the others —
+  see `docs/PONG.md`): a short diagnostic looked healthier, but the full
+  2M-step run scored **1/7,806 (0.013%)** — frozen almost immediately and
+  never recovered, dramatically worse than frame stacking alone.
+  **Reverted.** A more theoretically correct update isn't automatically a
+  better one for this setup; kept in `learning/actor.py` as an opt-in,
+  off-by-default option and a documented negative result, not deleted.
 
 ## Other game environments
 

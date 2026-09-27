@@ -168,6 +168,8 @@ def simulation_loop(state: SharedState, stop_event: threading.Event):
         actor_params=ActorCriticParams(
             gamma=0.97, eta_actor=0.05, trace_decay=0.7, da_gain=1.5,
             w_min=-3.0, w_max=3.0, normalize_advantage=True,
+            # policy_gradient=True was tried and reverted here too -- see
+            # docs/PONG.md and experiments/train_pong.py's matching comment.
         ),
     )
     ram_to_kc = RamToKC(n_in=128 * N_FRAME_STACK, n_kc=n_kc)
