@@ -190,7 +190,15 @@ def main():
         compartments=compartments,
         dopamine_params=DopamineParams(eta=0.02, trace_decay=0.9, w_min=0.0, w_max=3.0),
         actor_params=ActorCriticParams(
-            gamma=0.97, eta_actor=0.05, trace_decay=0.7, da_gain=1.5,
+            # trace_decay raised from 0.7 -- an effective credit-assignment
+            # window of only ~3.3 steps (1/(1-0.7)) against ~270-step
+            # episodes where the only reward arrives at the very end. 0.9
+            # gives a ~10-step window: still short of the full episode, but
+            # a much better point on the bias (too-short trace never
+            # credits the actions that actually mattered) vs. variance
+            # (too-long trace credits lots of irrelevant ones too) tradeoff
+            # than what was here before. See docs/PONG.md.
+            gamma=0.97, eta_actor=0.05, trace_decay=0.9, da_gain=1.5,
             w_min=-3.0, w_max=3.0,
             normalize_advantage=True,  # the fix from docs/STATUS.md's FlappyBird finding
             # policy_gradient=True was tried and reverted -- see docs/PONG.md's

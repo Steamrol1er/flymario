@@ -11,3 +11,4 @@ runs/
 results/
 *.log
 .ipynb_checkpoints/
+_vizdoom.ini

@@ -33,6 +33,11 @@ autorom[accept-rom-license]
 flappy-bird-gymnasium
 minigrid
 
+# Fly Marksman reproduction (experiments/run_marksman.py): ViZDoom's
+# defend_the_center scenario, bundled with the package, no WAD/compiler
+# needed -- prebuilt wheel installs cleanly on Windows/Linux/macOS.
+vizdoom
+
 # Utilities
 tqdm
 matplotlib
