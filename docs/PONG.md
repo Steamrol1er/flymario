@@ -274,6 +274,59 @@ Whether that's specific to this architecture, this environment, or these
 hyperparameters isn't established by one run; it's reported as what
 actually happened, not diagnosed further.
 
+### Multi-seed evaluation: the earlier single-run comparisons were noisier than they looked
+
+Every result up to this point (the original run, frame stacking, the
+policy-gradient attempt) was **one run each**. `experiments/train_pong.py`
+now takes `--seed` (controls torch/numpy RNG, the environment's own RNG
+stream, and the KC projection matrix, so a seed is fully reproducible) and
+`--out` (a distinct results path per seed), specifically to stop drawing
+conclusions from single, possibly-lucky-or-unlucky runs.
+
+Also raised the exploration floor from ε=0.05 to ε=0.15 (decay stretched
+so it's reached around 75% through training instead of ~58%) at the same
+time, since every freeze observed so far happened *while* ε was still
+fairly high, then got locked in as ε kept dropping and closed off the
+route back out.
+
+Three seeds, 700,000 steps each (a shorter budget than the 2,000,000-step
+runs above, chosen to fit three runs in one session):
+
+| Seed | Episodes | Scored | Rate |
+|---|---|---|---|
+| 0 | 2,670 | 25 | 0.94% |
+| 1 | 2,679 | 13 | 0.49% |
+| 2 | 2,514 | 82 | **3.26%** |
+
+**A 6.7x range (0.49%-3.26%) from the same code, same step budget, only
+the random seed different.** This is the real headline finding, and it
+changes how much weight the earlier single-run comparisons deserve:
+
+- The **frame-stacking result** (2.56% vs. 1.89%, one run each, a 0.67
+  percentage-point gap) is well within the variance just measured
+  directly. It should be read as "not established either way" now, not
+  "confirmed" — the earlier write-up overstated it by treating a
+  single-run difference as decisive. Frame stacking is still kept (it's
+  well-justified on independent grounds -- a real information gap, not
+  just a score that happened to be higher this once), but the specific
+  score improvement claimed for it doesn't hold up to this scrutiny.
+- The **policy-gradient result** (0.013%, 1/7,806) is a different story:
+  it sits far below even the *worst* seed in this natural variance band
+  (0.49%). A gap that large relative to the measured noise floor is not
+  explained by seed variance alone, so that revert decision stands.
+- (One seed -- 0 -- took 163 minutes instead of the expected ~8, almost
+  certainly a stray CPU-contending process from an earlier background job
+  rather than anything algorithmic; the wall-clock number for that run is
+  an artifact, its score-rate result is not.)
+
+**Read this as**: this project's own earlier reporting wasn't rigorous
+enough on the smaller effect sizes, and this section says so plainly
+rather than quietly using a more careful method going forward without
+flagging that the past comparisons need to be discounted. Any future
+claim about a modest-sized improvement needs multiple seeds before it's
+trustworthy; large, qualitative differences (frozen vs. not, 0.013% vs.
+2-3%) don't.
+
 ## Live local demo (not a precomputed replay)
 
 The first version of this (`viz/pong_play.html`) was a Claude Artifact

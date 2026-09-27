@@ -57,8 +57,11 @@ class PongEnv:
     def _ram(self):
         return self.env.unwrapped.ale.getRAM()
 
-    def reset(self):
-        obs, info = self.env.reset()
+    def reset(self, seed: int | None = None):
+        # gymnasium seeds the underlying RNG stream on a seeded reset; every
+        # later unseeded reset continues that same seeded stream, so callers
+        # only need to pass `seed` once, at the very start of a run
+        obs, info = self.env.reset(seed=seed)
         ram = obs if not self.render_rgb else self._ram()
         return ram, self._augment_info(info, ram, obs if self.render_rgb else None)
 

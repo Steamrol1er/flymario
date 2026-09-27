@@ -167,8 +167,19 @@ def main():
                      help=f"shortcut for --target-steps {QUICK_TARGET_STEPS:,} (a fast sanity check)")
     ap.add_argument("--checkpoint-every", type=int, default=1_000_000,
                      help="also save an intermediate checkpoint every this many steps")
+    ap.add_argument("--seed", type=int, default=0,
+                     help="controls torch/numpy RNG, the env's own RNG stream, and the KC "
+                          "projection -- vary this across runs for a real multi-seed comparison "
+                          "instead of drawing conclusions from a single (partly lucky) run; see "
+                          "docs/PONG.md's note on why this matters")
+    ap.add_argument("--out", type=str, default="analysis/pong_run.json",
+                     help="where to write results (use a per-seed path for multi-seed runs)")
     args = ap.parse_args()
     target_steps = QUICK_TARGET_STEPS if args.quick else args.target_steps
+    checkpoint_path = args.out.replace(".json", "_checkpoint.pt")
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     conn, groups = load_toy_connectome()
     n_kc = len(groups["kc"])
@@ -190,11 +201,14 @@ def main():
             # not better. Left off.
         ),
     )
-    ram_to_kc = RamToKC(n_in=128 * N_FRAME_STACK, n_kc=n_kc)
+    ram_to_kc = RamToKC(n_in=128 * N_FRAME_STACK, n_kc=n_kc, seed=args.seed)
     env = PongEnv()
+    env.reset(seed=args.seed)  # seeds the env's own RNG stream once; every
+                                # later (unseeded) reset continues it
 
     print(f"Target: {target_steps:,} environment steps "
-          f"({target_steps/DEFAULT_TARGET_STEPS*20:.1f}% of DQN's 50M-frame Atari standard)")
+          f"({target_steps/DEFAULT_TARGET_STEPS*20:.1f}% of DQN's 50M-frame Atari standard), "
+          f"seed={args.seed}")
     t_start = time.time()
 
     history = []
@@ -206,8 +220,13 @@ def main():
 
     while total_steps < target_steps:
         # anneal exploration over the STEP budget, not episode count, since
-        # episode length itself changes a lot as (if) the policy improves
-        epsilon = max(0.05, 0.3 * (1 - total_steps / (target_steps * 0.7)))
+        # episode length itself changes a lot as (if) the policy improves.
+        # Floor raised from 0.05 to 0.15 and the decay stretched out (floor
+        # now reached around 75% through training instead of ~58%): every
+        # freeze observed so far happened *while* epsilon was still fairly
+        # high, then got locked in as epsilon kept dropping and closed off
+        # the route back out -- see docs/PONG.md.
+        epsilon = max(0.15, 0.3 * (1 - total_steps / (target_steps * 1.5)))
         result = run_episode(env, ac, ram_to_kc, epsilon, record=True)
         total_steps += result["steps"]
         history.append({"ep": ep, "total_reward": result["total_reward"],
@@ -233,7 +252,7 @@ def main():
                   f"eps={epsilon:.2f}  elapsed={elapsed/60:.1f}m  eta={eta_s/60:.1f}m")
 
         if total_steps >= next_checkpoint:
-            torch.save(ac.state_dict(), "analysis/pong_checkpoint.pt")
+            torch.save(ac.state_dict(), checkpoint_path)
             next_checkpoint += args.checkpoint_every
 
         ep += 1
@@ -252,13 +271,14 @@ def main():
         "target_steps": target_steps,
         "total_steps": total_steps,
         "wall_clock_seconds": elapsed,
+        "seed": args.seed,
     }
-    with open("analysis/pong_run.json", "w") as f:
+    with open(args.out, "w") as f:
         json.dump(out, f)
-    print("Wrote analysis/pong_run.json")
+    print(f"Wrote {args.out}")
 
-    torch.save(ac.state_dict(), "analysis/pong_checkpoint.pt")
-    print("Wrote analysis/pong_checkpoint.pt (live/server.py warm-starts from this if present)")
+    torch.save(ac.state_dict(), checkpoint_path)
+    print(f"Wrote {checkpoint_path} (live/server.py warm-starts from analysis/pong_checkpoint.pt if present)")
 
 
 if __name__ == "__main__":

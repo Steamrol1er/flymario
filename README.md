@@ -219,6 +219,14 @@ different scales:
   **Reverted.** A more theoretically correct update isn't automatically a
   better one for this setup; kept in `learning/actor.py` as an opt-in,
   off-by-default option and a documented negative result, not deleted.
+- **Three-seed comparison** (`--seed`, added specifically to stop drawing
+  conclusions from single runs), 700K steps each: **0.94%, 0.49%,
+  3.26%** — a 6.7x range from identical code, only the seed different.
+  This means the frame-stacking "improvement" above (a 0.67-point gap,
+  one run each) is within normal seed noise and isn't actually
+  established; the policy-gradient failure (0.013%) is far below even
+  the worst seed here, so that revert still stands. See `docs/PONG.md`
+  for the full, honest reassessment.
 
 ## Other game environments
 
