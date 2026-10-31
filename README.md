@@ -1,5 +1,12 @@
 # FlyMario
 
+![Real-wiring fly circuit playing ViZDoom](docs/marksman_demo.gif)
+
+*The real FlyWire LC10a -> AOTU -> DNa02 circuit (3,963 LIF neurons, no
+training) turning toward and shooting enemies in ViZDoom. Right panel: live
+firing rates of the readout neuron groups. See `docs/MARKSMAN.md`.*
+
+
 Use the *Drosophila* whole-brain connectome (FlyWire) as a spiking neural
 network, train it with a dopamine-based (three-factor) learning rule modeled
 on the fly mushroom body, and use it to play Super Mario Bros.
