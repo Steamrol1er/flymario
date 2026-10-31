@@ -270,3 +270,21 @@ can't get it installed:
 
 See `docs/STATUS.md` for what's implemented vs. still to do against the
 milestones in `docs/PLAN.md`.
+
+## Hybrid Pong and Fly Marksman
+
+See `docs/MARKSMAN.md` (untrained real-wiring circuit playing ViZDoom, with a
+scrambled-wiring control) and `learning/qhead.py` (fixed connectome-derived
+encoding plus a trained Q-head).
+
+## Credits and licenses
+
+Code: MIT (see `LICENSE`). Third-party data is downloaded at setup time and
+not redistributed here:
+
+- FlyWire connectome v783 connectivity tables: Dorkenwald et al. 2024;
+  Shiu et al. 2024 (`philshiu/Drosophila_brain_model`).
+- Brain meshes: VirtualFlyBrain JFRC2 template, CC BY 4.0.
+- Fly Marksman circuit definition: `webergithub/fruitfly-lab`; the neuron list
+  is theirs, the wiring extraction and controller here are independent.
+- Game environments: Atari Learning Environment (ale-py) and ViZDoom.
