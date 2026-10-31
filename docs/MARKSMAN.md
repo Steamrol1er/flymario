@@ -62,42 +62,70 @@ Fixed readout thresholds from this sweep (frozen for all subsequent
 episodes): real wiring `turn_th=72.74, fire_th=2.5`; scrambled wiring (its
 own calibration) `turn_th=10.11, fire_th=8.0`.
 
-## Gameplay result
+## Gameplay result (20 episodes per policy, seed 0)
 
-5 episodes each, `defend_the_center`, seed 0:
-
-| Policy | Mean kills/episode | Survival | Accuracy |
+| Policy | Kills/episode (mean +/- SD) | Survival | Accuracy |
 |---|---|---|---|
-| **Fly (real wiring)** | **1.4 +/- 0.89** | 8.2s | 0.82 |
-| **Scrambled (degree-preserving)** | **0.6 +/- 0.55** | 7.9s | 0.60 |
+| Oracle (ceiling, no brain) | 13.5 +/- 1.9 | 21.3s | 0.52 |
+| **Fly (real wiring)** | **1.55 +/- 1.32** | 8.9s | 0.63 |
+| Random button presses (floor) | 1.10 +/- 0.64 | 8.6s | 0.06 |
+| Scrambled wiring, real thresholds | 0.75 +/- 0.55 | 8.2s | 0.59 |
+| Scrambled wiring, own calibration | 0.45 +/- 0.51 | 8.6s | 0.29 |
 
-Real wiring outperforms scrambled wiring by ~2.3x -- the same direction as
-the published result (10.2 vs 0.7 kills/episode, ~14.6x), but at noticeably
-smaller absolute scale.
+Statistical tests, fly vs each control (Welch t, one-sided Mann-Whitney):
 
-**Being honest about what this does and doesn't establish:**
+| Comparison | Welch t | p (two-sided) | Mann-Whitney p (fly greater) |
+|---|---|---|---|
+| fly vs scrambled | 2.51 | 0.019 | 0.015 |
+| fly vs scrambled_cal | 3.48 | 0.002 | 0.0006 |
+| fly vs random | 1.37 | 0.18 | 0.21 |
 
-- At n=5 episodes per condition, the standard deviations are large enough
-  relative to the mean difference that this is *suggestive, not
-  statistically confirmed* (rough two-sample t ~= 1.7, short of the
-  conventional p<0.05 threshold at this sample size). This project already
-  learned the hard way on Pong that single-digit-episode comparisons can be
-  noise; the honest read here is "the direction and the calibration-curve
-  evidence both point the same way, but the gameplay sample is too small to
-  call it confirmed" pending more episodes.
-- The absolute kill rate (1.4 vs. the published 10.2) is well below the
-  original. Likely reasons: `EXT_KICK_MV` (how strongly an injected Poisson
-  spike drives LC10a) is a from-scratch guess tuned only enough to produce
-  a sane calibration curve, not extensively fit the way the original
-  authors' rate-based stimulation was; the accuracy (0.82) shows aim itself
-  is fine when the circuit fires -- the gap looks like it's in how
-  aggressively/quickly the circuit acquires and tracks targets, not in
-  marksmanship once locked on.
-- Both wall-clock runs were slowed by the same stray CPU-contention pattern
-  documented elsewhere in this project (`docs/STATUS.md`) -- e.g. the fly
-  calibration sweep took 8123s vs. scrambled's 98s for identical work. This
-  affects wall time only, not the reported kills/survival/accuracy numbers
-  themselves.
+**What this supports and what it doesn't**
+
+- **Supported:** real wiring scores more kills than degree-preserving
+  scrambles of the same circuit (p about 0.02 and 0.002). With the
+  calibration curves (real wiring gives a clean, correctly signed steering
+  signal; scrambled does not), this is evidence that the specific wiring
+  matters, which is the direction of the published result.
+- **Not supported:** that the circuit beats chance. Its 1.55 kills is
+  statistically indistinguishable from random button presses (1.10, p=0.18).
+  The scrambled circuits score *below* random, mostly because they rarely
+  fire, so the real finding is "scrambled is worse than random", not
+  "fly is much better than random".
+- **Where the fly does clearly better:** shooting accuracy, 0.63 vs 0.06 for
+  random. It fires when aimed. It just turns too slowly to acquire enough
+  targets, so total kills stay low. The oracle shows the headroom: about 13.5.
+- **Scale gap:** the published result is 10.2 kills for real wiring. Ours is
+  about 1.5. The likely cause is our `EXT_KICK_MV` external-drive constant,
+  tuned only enough to get a sane calibration curve, not fit for performance.
+  This is untested and is the first thing to try.
+- Earlier 5-episode pilot (fly 1.4, scrambled 0.6) was consistent with these
+  numbers but too small to conclude anything.
+
+## What the "oracle" is
+
+`oracle` is a baseline that bypasses the fly brain entirely. Each tic it
+reads the true angle of the nearest visible enemy from ViZDoom's object
+labels (the same input the fly circuit receives) and applies a hard-coded
+rule: turn left if the enemy is more than 6 degrees left of center, turn
+right if more than 6 degrees right, attack if within 6 degrees, and turn
+right to search when nothing is visible. It aims perfectly and instantly, so
+it measures how many kills are possible with ideal steering. `random`
+presses buttons uniformly and is the floor.
+
+## What the fly does and does not do here
+
+There is no learning anywhere in this experiment. Wiring and parameters are
+fixed, and only the readout thresholds are set once by a calibration sweep.
+Several parts are engineered rather than biological: enemy bearing comes from
+ViZDoom object labels instead of simulated eyes, and the thresholds, fire
+rule and search-right default are hand-made. Only 3,963 of the connectome's
+138,639 neurons are simulated, because the pursuit pathway is all this
+behavior needs.
+
+Wall-clock times were inflated by CPU contention (for example the first fly
+calibration sweep took 8123s vs 98s for identical work). That affects run
+time only, not the reported scores.
 
 ## Reproduce it
 

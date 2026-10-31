@@ -160,6 +160,10 @@ same visualization to show the game itself is solvable. See
 `docs/STATUS.md` for the full account.
 
 ## Pong: real Atari, native interface, live
+> **Note:** the Pong agents use a synthetic 242-neuron toy circuit, not
+> FlyWire data, and a random-play baseline (3.7%) scores above both trained
+> agents (about 2.4%). See the corrections at the top of `docs/PONG.md`.
+
 
 The real game, downloaded for real, played through its own unmodified
 interface — no hand-crafted features, no remapped actions, no reshaped

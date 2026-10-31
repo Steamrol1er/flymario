@@ -6,6 +6,20 @@ interface is actually used, what problems came up, and what the real
 result is. Code lives in `env/pong_env.py`, `experiments/train_pong.py`,
 `viz/pong_play.html`.
 
+> **Corrections and headline result (added after the final evaluations).**
+> 1. **The Pong agents do not use real FlyWire data.** Both
+>    `experiments/train_pong.py` and `experiments/train_pong_hybrid.py` build
+>    their "brain" from `load_toy_connectome()`: a synthetic 242-neuron
+>    circuit (200 Kenyon-cell-like units, 2 output units, 40 odor units),
+>    chosen for speed. The real 138,639-neuron connectome is used only in the
+>    sugar-feeding validation and the Fly Marksman experiment
+>    (`docs/MARKSMAN.md`). Read the Pong "fly brain" as a random sparse
+>    projection plus a learning rule, not as fly anatomy.
+> 2. **Neither agent beats random play.** A uniform-random policy scores
+>    **3.7%** on this metric (2.8 / 5.0 / 3.3% over 1,000 episodes per seed).
+>    The dopamine agent (trace 0.9) averages 2.4% and the hybrid averages
+>    2.4%. See "Final evaluation" below.
+
 ## Why Pong
 
 Pong is a real-time motion-tracking task: track a moving object, move a
@@ -326,6 +340,51 @@ flagging that the past comparisons need to be discounted. Any future
 claim about a modest-sized improvement needs multiple seeds before it's
 trustworthy; large, qualitative differences (frozen vs. not, 0.013% vs.
 2-3%) don't.
+
+## Final evaluation: dopamine vs. hybrid vs. random (3 seeds each)
+
+Score rate = fraction of episodes (points) won, the same metric throughout.
+Dopamine rows: 700K steps, trace_decay 0.9. Hybrid rows: 2M steps,
+`experiments/train_pong_hybrid.py`, linear Q-head on the same fixed encoding.
+Random: uniform random actions, 1,000 episodes per seed.
+
+| Policy | Seed 0 | Seed 1 | Seed 2 | Mean | Last 10% of episodes (mean) |
+|---|---|---|---|---|---|
+| Random play | 2.8% | 5.0% | 3.3% | **3.7%** | n/a |
+| Dopamine, trace 0.7 | 0.94% | 0.49% | 3.26% | 1.56% | 1.0% |
+| Dopamine, trace 0.9 | 3.02% | 1.96% | 2.21% | 2.40% | 2.6% |
+| Hybrid Q-head | 1.79% | 3.91% | 1.38% | 2.36% | 1.3% |
+
+Per-seed last-10% rates: dopamine 0.9 = 2.3 / 1.9 / 3.5%; hybrid =
+0.4 / 2.9 / 0.4%.
+
+**What this shows, honestly**
+
+- **Neither agent learned to beat random play.** Random scores 3.7%; the
+  best seed-mean for a trained agent is 2.4%. With three seeds per arm none
+  of these differences is statistically meaningful, but nothing here
+  supports "the agent learned Pong". The earlier "2-3%" figures were
+  presented without this baseline, which was a gap in the earlier reporting.
+- **trace_decay 0.9 vs. 0.7:** the three-seed range tightened (0.49-3.26%
+  became 1.96-3.02%) and the mean rose, which matches the reasoning that a
+  3-step eligibility window is too short for a ~270-step episode with only a
+  terminal reward. With n=3 this is suggestive, not established.
+- **Hybrid vs. dopamine:** equal on the whole-run mean (2.36% vs. 2.40%).
+  The hybrid is *less stable*: two of three seeds scored 3-4% early and
+  decayed to about 0.4% by the end (seed 0: 4.2% in the first tenth of
+  training, 0.4% in the last; seed 2: 3.2% to 0.4%), while the dopamine
+  agent held steady or improved. The early scores occur while epsilon is
+  near 1 (mostly random actions), so they mostly reflect random play, and
+  the decline looks like the Q-head degrading as exploration drops.
+- **So the training method is probably not the bottleneck.** Swapping the
+  dopamine rule for backprop with replay and a target network did not help.
+  The more likely limits are the features (a fixed random projection of
+  raw RAM bytes, where the decision depends on a relation such as ball
+  height minus paddle height) and the single linear readout. Untested next
+  steps: a deeper Q-head, an encoder that preserves that relation, and
+  real mushroom-body structure from FlyWire in place of the toy circuit.
+- **Caveats:** three seeds, one hyperparameter setting per arm, no tuning of
+  the hybrid. Absence of a gain here does not show the approach cannot work.
 
 ## Live local demo (not a precomputed replay)
 
