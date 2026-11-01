@@ -529,18 +529,15 @@ warm-start from a specific `experiments/train_pong.py` run instead.
 
 ## What would likely help next
 
-- **A proper policy-gradient implementation** (actual log-probability
-  gradient of the softmax, not the current ad-hoc `eligibility * delta`
-  rule) — closer to what the actor-critic literature above actually
-  specifies.
-- **A richer, less noisy KC encoding.** A fixed random projection of raw
-  RAM bytes is a poor substitute for the real connectome's actual
-  projection-neuron → Kenyon-cell wiring (still blocked on FlyWire Codex
-  annotations — see `docs/STATUS.md`).
-- **Frame stacking / a short RAM history** instead of a single-frame
-  snapshot, so the network can see ball *velocity*, not just position —
-  standard practice in Atari RL (DQN stacks 4 frames for exactly this
-  reason) and something this implementation currently doesn't do at all.
-- **Longer training.** 400 episodes is small by Atari RL standards (DQN-era
-  papers train for millions of frames); this budget was chosen to fit a
-  single interactive session, not because it's expected to be enough.
+Already tried above and ruled out as the fix: frame stacking (within seed
+noise), a textbook policy-gradient actor update (worse, reverted), 20x
+longer training (no gain), and swapping the dopamine rule for replay-based
+Q-learning (hybrid; changed variance, not the mean). Still untried:
+
+- **An encoder that exposes the relation the task needs** (ball height minus
+  paddle height), instead of a fixed random projection of raw RAM bytes.
+- **A nonlinear readout** (one hidden layer) so the relation can be built
+  from the features even if the encoder doesn't expose it.
+- **Real mushroom-body wiring from FlyWire** in place of the synthetic
+  242-neuron toy circuit. Blocked on the Codex `classification.csv`
+  annotations (see `docs/STATUS.md`).

@@ -9,10 +9,17 @@ firing rates of the readout neuron groups. See `docs/MARKSMAN.md`.*
 
 
 Use the *Drosophila* whole-brain connectome (FlyWire) as a spiking neural
-network, train it with a dopamine-based (three-factor) learning rule modeled
-on the fly mushroom body, and use it to play Super Mario Bros.
+network and see what it can do in games: run real wiring forward with no
+training (Fly Marksman, the main positive result), and train it with a
+dopamine-based (three-factor) learning rule modeled on the fly mushroom body
+(platformer, FlappyBird, Pong; none beats a simple baseline convincingly).
 
-This is a research/education project, not a competitive Mario bot. See
+The project started as "fly brain plays Super Mario Bros", hence the name.
+Real Mario never ran here: `nes-py` needs a C++ toolchain this machine
+doesn't have (see "Mario environment install notes"). The Mario code path
+exists and runs on the toy connectome only.
+
+This is a research/education project, not a competitive game bot. See
 `docs/PLAN.md` for the full write-up of the approach, the biological
 simplifications made, and the milestones. Short version:
 
@@ -31,7 +38,7 @@ simplifications made, and the milestones. Short version:
 | Experiment | Result | Verdict |
 |---|---|---|
 | Simulator validation | Reproduces the published sugar -> MN9 feeding result on the full 138,639-neuron connectome | Validated |
-| Fly Marksman (untrained real wiring, ViZDoom) | Held-out, 20 episodes: **8.0 +/- 5.2 kills** vs 0.0 scrambled wiring, 1.05 random, 12.4 oracle (fly vs scrambled p = 1.5e-6, vs random p = 9e-6) | Wiring matters; reproduces the published direction |
+| Fly Marksman (untrained real wiring, ViZDoom) | Held-out, 20 episodes: **8.0 +/- 5.2 kills** vs 0.0 scrambled wiring, 1.0 recalibrated scramble, 1.05 random, 12.4 oracle (fly vs scrambled p = 1.5e-6, vs random p = 9e-6). Silencing AOTU019+025: 0.0; AOTU025 alone: 7.85 (no effect) | Wiring matters; reproduces the published direction |
 | Pong, dopamine rule (10 seeds) | 2.8% sampled, 0.0% greedy, vs 3.1% for random play | No learning shown |
 | Pong, hybrid fixed encoding + Q-head (6 seeds) | 2.8 +/- 3.2% (bimodal), vs 3.1% random | No learning shown |
 
@@ -272,11 +279,16 @@ doesn't have (see below). Verified working here without any compiler:
 (no prebuilt wheels found) — don't spend time on those without a from-
 source build.
 
-## Running Mario training
+## Running Mario training (blocked)
 
 ```bash
 python -m experiments.train --config experiments/m2_config.yaml
 ```
+
+Needs `gym-super-mario-bros`/`nes-py` installed (see below). With
+`connectome.source: shiu` it also needs FlyWire Codex `classification.csv`,
+which this project doesn't have; `connectome.source: toy` runs without it.
+No Mario result has been produced.
 
 ## Mario environment install notes
 

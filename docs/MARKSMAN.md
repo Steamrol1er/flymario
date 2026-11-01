@@ -77,13 +77,32 @@ seeds were not used for tuning.
 |---|---|---|---|---|
 | Oracle (ceiling, no brain) | 12.4 +/- 2.7 | 14 | 20.8s | 0.48 |
 | **Fly (real wiring)** | **8.0 +/- 5.2** | 6 | 15.7s | 0.44 |
+| Lesion AOTU025 only | 7.85 +/- 5.3 | 6.5 | 15.4s | 0.48 |
 | Random button presses | 1.05 +/- 0.69 | 1 | 8.7s | 0.06 |
+| Scrambled, recalibrated (`scrambled_cal`) | 1.0 +/- 0.46 | 1 | 8.9s | 0.39 |
 | Scrambled wiring | 0.0 +/- 0.0 | 0 | 8.3s | 0.00 |
+| Lesion AOTU019 + AOTU025 | 0.0 +/- 0.0 | 0 | 8.3s | 0.00 |
 
 | Comparison | Welch t | p (two-sided) | Mann-Whitney p (fly greater) |
 |---|---|---|---|
 | fly vs scrambled | 6.88 | 1.5e-6 | 3.9e-9 |
 | fly vs random | 5.92 | 9.2e-6 | 5.9e-7 |
+| fly vs scrambled_cal | 6.00 | 8.5e-6 | 2.0e-7 |
+| fly vs lesion (AOTU019 + AOTU025) | 6.88 | 1.5e-6 | 3.9e-9 |
+| fly vs lesion AOTU025 only | 0.09 | 0.93 | 0.45 |
+
+Controls (same seed, drive and episode count):
+
+- **Recalibrated scramble.** `scrambled_cal` gets readout thresholds from its
+  own calibration sweep instead of the real circuit's. It rises only to random
+  level (1.0 vs 1.05, p = 0.79), so the scrambled 0.0 is not an artifact of
+  borrowed thresholds. Caveat: thresholds come from one scramble (calibration
+  seed 1000), while each episode plays a different scramble.
+- **Lesion of both AOTU types** removes the behavior completely: zero shots
+  fired in all 20 episodes. The fire rule reads AOTU019, so this is partly
+  by construction; it confirms the readout gets nothing from elsewhere.
+- **Lesion of AOTU025 alone** has no measurable effect (7.85 vs 8.0). In this
+  model AOTU025 is dispensable; the behavior runs through AOTU019 and DNa02.
 
 The real circuit now clearly beats both the scrambled circuits and random
 play. All 20 scrambled episodes scored zero kills. The fly reaches about 65%
@@ -163,7 +182,7 @@ python -m experiments.run_marksman --policy fly --episodes 10 --seed 0
 python -m experiments.run_marksman --policy scrambled --episodes 10 --seed 0
 ```
 
-Other policies available for further comparison (not yet run here):
-`scrambled_cal` (scramble re-calibrated on its own curve, a fairer control),
-`lesion` / `lesion025` (silencing AOTU019/AOTU025), `random` and `oracle`
-(floor/ceiling baselines that bypass the brain entirely).
+The held-out table uses `--seed 1000 --kick 25 --tag _best --episodes 20`
+(calibrate first with `--calibrate --cal-only fly`, and `--cal-only scrambled`
+for `scrambled_cal`). Other policies: `scrambled_cal`, `lesion`, `lesion025`,
+`random`, `oracle`.

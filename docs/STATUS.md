@@ -1,7 +1,14 @@
 # Status
 
 What's implemented vs. still to do, against the milestones in `docs/PLAN.md`.
-Written 2026-09-26.
+Written 2026-09-26, updated 2026-11-01.
+
+**Headline:** the Fly Marksman experiment (`docs/MARKSMAN.md`) is the main
+positive result: untrained real FlyWire wiring (3,963 neurons) scores 8.0
+kills/episode in ViZDoom vs 0.0 for scrambled wiring. Every learning
+experiment (platformer, FlappyBird, Pong) is documented below and in
+`docs/PONG.md`; none beats a random or trivial baseline convincingly. Real
+Mario never ran (see "Known gaps").
 
 ## Done
 
@@ -141,6 +148,24 @@ Written 2026-09-26.
   use a *separate* ML model for decisions rather than having the
   dopamine-modulated circuit's own output drive play -- this project
   attempts the harder version of that problem.
+  **Superseded by the frozen evaluation** (`docs/PONG.md`, "Evaluation-only
+  results"): random play 3.1% (10 seeds), dopamine sampled 2.8% (10 seeds),
+  dopamine greedy 0.0%. No learning shown. The Pong "brain" is the synthetic
+  242-neuron toy circuit, not FlyWire data.
+- **Hybrid Pong** (`learning/qhead.py`, `experiments/train_pong_hybrid.py`):
+  the same fixed encoding with a replay-trained linear Q-head instead of the
+  dopamine rule. Frozen evaluation 2.8 +/- 3.2% over 6 seeds (bimodal: three
+  seeds 4-7%, three 0%), not different from random. Swapping the learning
+  rule changed variance, not the mean, so the features/readout are the more
+  likely limit.
+- **Fly Marksman** (`connectome/marksman_circuit.py`, `sim/marksman_brain.py`,
+  `env/vizdoom_marksman_env.py`, `experiments/run_marksman.py`, full account
+  in `docs/MARKSMAN.md`): independent reproduction of `fruitfly-lab`'s
+  LC10a -> AOTU -> DNa02 pursuit circuit on our own weights and simulator,
+  no learning. Held-out (seed 1000, 20 episodes, 25 mV drive): fly 8.0 +/-
+  5.2 kills, scrambled 0.0, random 1.05, oracle 12.4. Fly vs scrambled
+  p = 1.5e-6. Controls: recalibrated scramble 1.0 (random level), AOTU019 +
+  AOTU025 lesion 0.0, AOTU025-only lesion 7.85 (no effect).
 
 ## Known gaps / next steps
 
@@ -180,12 +205,13 @@ Written 2026-09-26.
    subcircuit.py`) is needed for real training throughput, not just
    nice-to-have. `experiments/train.py` must run on the *subcircuit*, not
    the full connectome, once cell-type resolution (1) is in place.
-6. **No exploratory data analysis / weight-visualization tooling yet**
-   (plan section 9): logging dopamine activity, KC->MBON weight changes,
-   lesion studies, random-wiring control. Not started.
-7. **PPO / "always right+jump" baselines** (plan section 4) not implemented
-   yet — needed to know if the fly-brain model is doing anything better than
-   trivial policies.
+6. **Analysis tooling (plan section 9) is partial.** Random-wiring controls
+   and lesions exist for Marksman (`scrambled`, `scrambled_cal`, `lesion`,
+   `lesion025`); there is still no KC->MBON weight-change logging or PAM
+   lesion for the learning experiments.
+7. **Baselines are partial.** Random baselines exist for Pong and Marksman,
+   plus an oracle ceiling for Marksman. No PPO upper bound for any game, and
+   no "always right+jump" baseline (that one only makes sense for Mario).
 
 ## Verified facts worth remembering
 
