@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 
 from connectome.marksman_circuit import load_marksman_circuit
 from env.vizdoom_marksman_env import MarksmanEnv
+import experiments.run_marksman as rm
 from experiments.run_marksman import make_policy
 from sim.marksman_brain import PANEL, steer_signal
 
@@ -38,7 +39,10 @@ def main():
     ap.add_argument("--policy", default="fly")
     ap.add_argument("--seed", type=int, default=3)
     ap.add_argument("--out", default="docs/marksman_demo.gif")
+    ap.add_argument("--kick", type=float, default=None)
+    ap.add_argument("--tag", default="")
     a = ap.parse_args()
+    rm.KICK, rm.TAG = a.kick, a.tag
     circuit = load_marksman_circuit()
     env = MarksmanEnv(seed=a.seed)
     act, _ = make_policy(a.policy, circuit, a.seed)

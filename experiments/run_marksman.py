@@ -46,8 +46,12 @@ CAL_AZ = [-90, -75, -60, -45, -30, -20, -10, -5, 0, 5, 10, 20, 30, 45, 60, 75, 9
 POLICIES = ["fly", "scrambled", "scrambled_cal", "lesion", "lesion025", "random", "oracle"]
 
 
+KICK = None   # set from --kick; None uses sim/marksman_brain.py EXT_KICK_MV
+TAG = ""      # set from --tag; suffixes output files so sweeps do not overwrite each other
+
+
 def load_cal(name: str) -> dict:
-    return json.loads((OUT_DIR / f"marksman_calibration_{name}.json").read_text())["cal"]
+    return json.loads((OUT_DIR / f"marksman_calibration_{name}{TAG}.json").read_text())["cal"]
 
 
 def make_policy(name: str, circuit, seed: int):
@@ -69,7 +73,7 @@ def make_policy(name: str, circuit, seed: int):
                       "lesion025": ["AOTU025_L", "AOTU025_R"]}.get(name, [])
     silenced = np.concatenate([circuit.groups[g] for g in lesion_groups]) if lesion_groups else None
 
-    brain = FlyBrain(c, seed=seed, silenced=silenced)
+    brain = FlyBrain(c, seed=seed, silenced=silenced, kick_mv=KICK)
     cal = load_cal("scrambled" if name == "scrambled_cal" else "fly")
 
     def act(targets):
@@ -94,7 +98,7 @@ def calibrate(which: str, seed: int = 0) -> dict:
     rows = []
     t0 = time.time()
     for az in CAL_AZ:
-        brain = FlyBrain(c, seed=seed)
+        brain = FlyBrain(c, seed=seed, kick_mv=KICK)
         for _ in range(10):
             brain.step([(float(az), 1.0)])  # let smoothed rates settle
         acc = {k: 0.0 for k in PANEL}
@@ -117,7 +121,7 @@ def calibrate(which: str, seed: int = 0) -> dict:
            "note": "turn_th = midpoint of |steer| at 0 deg and +/-10 deg; "
                    "fire_th = half the smaller of the two AOTU019 rates at 0 deg"}
     OUT_DIR.mkdir(exist_ok=True)
-    (OUT_DIR / f"marksman_calibration_{which}.json").write_text(
+    (OUT_DIR / f"marksman_calibration_{which}{TAG}.json").write_text(
         json.dumps({"rows": rows, "cal": cal, "seconds": round(time.time() - t0, 1)}, indent=1))
     print(f"[{which}] readout thresholds: {cal}  ({time.time() - t0:.1f}s)")
     return cal
@@ -154,7 +158,7 @@ def play(policy: str, episodes: int, seed: int, visible: bool = False) -> dict:
                "survival_s": round(float(np.mean([e["tics"] for e in eps])) / 35, 2),
                "accuracy": round(float(np.mean([e["accuracy"] for e in eps])), 3)}
     out = {"policy": policy, "episodes": eps, "summary": summary, "seed": seed}
-    (OUT_DIR / f"marksman_{policy}.json").write_text(json.dumps(out, indent=1))
+    (OUT_DIR / f"marksman_{policy}{TAG}.json").write_text(json.dumps(out, indent=1))
     print(f"[{policy}] mean kills {summary['kills']} +/- {summary['kills_sd']}, "
           f"survival {summary['survival_s']}s, accuracy {summary['accuracy']}")
     return out
@@ -167,11 +171,20 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--visible", action="store_true")
     ap.add_argument("--calibrate", action="store_true")
+    ap.add_argument("--cal-only", choices=["fly", "scrambled"], default=None,
+                    help="with --calibrate, calibrate just this wiring")
+    ap.add_argument("--kick", type=float, default=None, help="external drive per injected spike, mV")
+    ap.add_argument("--tag", type=str, default="", help="suffix for output files")
+    ap.add_argument("--seed-offset", type=int, default=0)
     args = ap.parse_args()
+    global KICK, TAG
+    KICK, TAG = args.kick, args.tag
     OUT_DIR.mkdir(exist_ok=True)
     if args.calibrate:
-        calibrate("fly", args.seed)
-        calibrate("scrambled", args.seed)
+        if args.cal_only != "scrambled":
+            calibrate("fly", args.seed)
+        if args.cal_only != "fly":
+            calibrate("scrambled", args.seed)
     else:
         play(args.policy, args.episodes, args.seed, args.visible)
 

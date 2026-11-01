@@ -62,45 +62,73 @@ Fixed readout thresholds from this sweep (frozen for all subsequent
 episodes): real wiring `turn_th=72.74, fire_th=2.5`; scrambled wiring (its
 own calibration) `turn_th=10.11, fire_th=8.0`.
 
-## Gameplay result (20 episodes per policy, seed 0)
+## Results
 
-| Policy | Kills/episode (mean +/- SD) | Survival | Accuracy |
-|---|---|---|---|
-| Oracle (ceiling, no brain) | 13.5 +/- 1.9 | 21.3s | 0.52 |
-| **Fly (real wiring)** | **1.55 +/- 1.32** | 8.9s | 0.63 |
-| Random button presses (floor) | 1.10 +/- 0.64 | 8.6s | 0.06 |
-| Scrambled wiring, real thresholds | 0.75 +/- 0.55 | 8.2s | 0.59 |
-| Scrambled wiring, own calibration | 0.45 +/- 0.51 | 8.6s | 0.29 |
+There are two stages: an initial untuned run, then a drive-strength sweep
+followed by a held-out test. The held-out test is the number to cite.
 
-Statistical tests, fly vs each control (Welch t, one-sided Mann-Whitney):
+### Held-out result (tuned drive, fresh seeds)
+
+External drive set to 25 mV per injected spike (chosen by the sweep below),
+calibrated on seed 1000, then 20 episodes per policy on seed 1000. These
+seeds were not used for tuning.
+
+| Policy | Kills/episode (mean +/- SD) | Median | Survival | Accuracy |
+|---|---|---|---|---|
+| Oracle (ceiling, no brain) | 12.4 +/- 2.7 | 14 | 20.8s | 0.48 |
+| **Fly (real wiring)** | **8.0 +/- 5.2** | 6 | 15.7s | 0.44 |
+| Random button presses | 1.05 +/- 0.69 | 1 | 8.7s | 0.06 |
+| Scrambled wiring | 0.0 +/- 0.0 | 0 | 8.3s | 0.00 |
 
 | Comparison | Welch t | p (two-sided) | Mann-Whitney p (fly greater) |
 |---|---|---|---|
-| fly vs scrambled | 2.51 | 0.019 | 0.015 |
-| fly vs scrambled_cal | 3.48 | 0.002 | 0.0006 |
-| fly vs random | 1.37 | 0.18 | 0.21 |
+| fly vs scrambled | 6.88 | 1.5e-6 | 3.9e-9 |
+| fly vs random | 5.92 | 9.2e-6 | 5.9e-7 |
 
-**What this supports and what it doesn't**
+The real circuit now clearly beats both the scrambled circuits and random
+play. All 20 scrambled episodes scored zero kills. The fly reaches about 65%
+of the oracle ceiling on average, with a wide spread (1 to 17 kills).
 
-- **Supported:** real wiring scores more kills than degree-preserving
-  scrambles of the same circuit (p about 0.02 and 0.002). With the
-  calibration curves (real wiring gives a clean, correctly signed steering
-  signal; scrambled does not), this is evidence that the specific wiring
-  matters, which is the direction of the published result.
-- **Not supported:** that the circuit beats chance. Its 1.55 kills is
-  statistically indistinguishable from random button presses (1.10, p=0.18).
-  The scrambled circuits score *below* random, mostly because they rarely
-  fire, so the real finding is "scrambled is worse than random", not
-  "fly is much better than random".
-- **Where the fly does clearly better:** shooting accuracy, 0.63 vs 0.06 for
-  random. It fires when aimed. It just turns too slowly to acquire enough
-  targets, so total kills stay low. The oracle shows the headroom: about 13.5.
-- **Scale gap:** the published result is 10.2 kills for real wiring. Ours is
-  about 1.5. The likely cause is our `EXT_KICK_MV` external-drive constant,
-  tuned only enough to get a sane calibration curve, not fit for performance.
-  This is untested and is the first thing to try.
-- Earlier 5-episode pilot (fly 1.4, scrambled 0.6) was consistent with these
-  numbers but too small to conclude anything.
+### Drive-strength sweep (tuning seed 500, 10 episodes each)
+
+The first run used a drive constant (`EXT_KICK_MV`, membrane kick per injected
+Poisson spike) of 6 mV that I had set only to get a sane calibration curve.
+Each setting below was re-calibrated on its own sweep, then played against the
+real circuit and against scrambled rewirings (a different rewiring each episode).
+
+| Drive per spike | Fly kills | Scrambled kills |
+|---|---|---|
+| 3 mV | 1.8 +/- 0.8 | 0.1 +/- 0.3 |
+| 10 mV | 1.7 +/- 2.0 | 0.3 +/- 0.5 |
+| 15 mV | 2.9 +/- 1.9 | 0.2 +/- 0.6 |
+| 25 mV | 7.1 +/- 4.4 | 0.0 +/- 0.0 |
+
+Caveats:
+
+- **Selection bias.** 25 mV was picked because it scored best on the tuning
+  seeds, so its 7.1 is optimistic. The held-out seeds (above) are the fair
+  estimate. They came out similar (8.0), so the choice does not look like
+  an overfit to the tuning seeds.
+- **Top of the range tried.** 25 mV was the largest value swept. Performance
+  was still rising, so a higher drive could do better. Not tested.
+- **The weaker drive misled the first result.** With the original 6 mV
+  setting (20 episodes, seed 0) the fly scored 1.55 +/- 1.32, not
+  significantly better than random (1.10 +/- 0.64, p = 0.18), although it
+  already beat scrambled wiring (0.75, p = 0.02; recalibrated scramble 0.45,
+  p = 0.002). The conclusion "the circuit does no better than chance" was a
+  property of an untuned parameter, not of the wiring.
+
+### What this supports
+
+- Real wiring produces far more kills than degree-preserving scrambles of
+  the same circuit (0.0 vs 8.0 held-out), and beats random presses, with no
+  learning. This reproduces the direction of the published result (10.2 real
+  vs 0.7 scrambled). Our 8.0 is somewhat lower than 10.2 and is from a
+  different, independently written implementation.
+- What it does not show: that any of this is "intelligence". The circuit is a
+  fixed steering reflex fed by engineered inputs (below).
+- Scrambling was done with 20 different rewirings per condition (one per
+  episode), not a single scramble.
 
 ## What the "oracle" is
 
@@ -110,7 +138,7 @@ labels (the same input the fly circuit receives) and applies a hard-coded
 rule: turn left if the enemy is more than 6 degrees left of center, turn
 right if more than 6 degrees right, attack if within 6 degrees, and turn
 right to search when nothing is visible. It aims perfectly and instantly, so
-it measures how many kills are possible with ideal steering. `random`
+it measures how many kills are possible with ideal steering (about 12-13). `random`
 presses buttons uniformly and is the floor.
 
 ## What the fly does and does not do here

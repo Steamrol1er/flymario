@@ -50,8 +50,10 @@ class FlyBrain:
     firing rates for the 8-neuron-group readout panel."""
 
     def __init__(self, circuit: MarksmanCircuit, seed: int = 0,
-                 silenced: np.ndarray | None = None, device: str = "cpu"):
+                 silenced: np.ndarray | None = None, device: str = "cpu",
+                 kick_mv: float | None = None):
         self.circuit = circuit
+        self.kick_mv = EXT_KICK_MV if kick_mv is None else kick_mv
         self.rng = np.random.default_rng(seed)
         self.sim = FlyBrainSimulator(circuit.connectome, params=LIFParams(),
                                       device=device, batch_size=1)
@@ -92,7 +94,7 @@ class FlyBrain:
             ext_spikes = self.rng.random(n) < spike_prob
             ext_current = torch.zeros(1, n, dtype=self.sim.dtype, device=self.sim.device)
             if ext_spikes.any():
-                ext_current[0, ext_spikes] = EXT_KICK_MV / self.sim.params.dt
+                ext_current[0, ext_spikes] = self.kick_mv / self.sim.params.dt
             spiked = self.sim.step(ext_current)
             if self.silenced_mask.any():
                 # lesion: force silenced neurons to never spike, so they

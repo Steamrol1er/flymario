@@ -15,10 +15,13 @@ result is. Code lives in `env/pong_env.py`, `experiments/train_pong.py`,
 >    sugar-feeding validation and the Fly Marksman experiment
 >    (`docs/MARKSMAN.md`). Read the Pong "fly brain" as a random sparse
 >    projection plus a learning rule, not as fly anatomy.
-> 2. **Neither agent beats random play.** A uniform-random policy scores
->    **3.7%** on this metric (2.8 / 5.0 / 3.3% over 1,000 episodes per seed).
->    The dopamine agent (trace 0.9) averages 2.4% and the hybrid averages
->    2.4%. See "Final evaluation" below.
+> 2. **Neither agent beats random play.** Evaluated with learning frozen
+>    over 1,000 points per seed, uniform-random play scores **3.1 +/- 0.6%**
+>    (10 seeds). The dopamine agent sampling from its own policy scores
+>    2.8 +/- 1.0% (10 seeds) and the hybrid agent 2.8 +/- 3.2% (6 seeds):
+>    neither differs significantly from random. The dopamine agent's greedy
+>    policy scores exactly 0.0% on all 10 seeds. See "Evaluation-only
+>    results" below.
 
 ## Why Pong
 
@@ -343,6 +346,10 @@ trustworthy; large, qualitative differences (frozen vs. not, 0.013% vs.
 
 ## Final evaluation: dopamine vs. hybrid vs. random (3 seeds each)
 
+*Training-time score rates (include exploration). The random row here is an
+early 3-seed estimate (3.7%); the 10-seed frozen evaluation below gives 3.1%
+and is the figure to use.*
+
 Score rate = fraction of episodes (points) won, the same metric throughout.
 Dopamine rows: 700K steps, trace_decay 0.9. Hybrid rows: 2M steps,
 `experiments/train_pong_hybrid.py`, linear Q-head on the same fixed encoding.
@@ -385,6 +392,53 @@ Per-seed last-10% rates: dopamine 0.9 = 2.3 / 1.9 / 3.5%; hybrid =
   real mushroom-body structure from FlyWire in place of the toy circuit.
 - **Caveats:** three seeds, one hyperparameter setting per arm, no tuning of
   the hybrid. Absence of a gain here does not show the approach cannot work.
+
+## Evaluation-only results (learning frozen, no exploration)
+
+The training-time score rates above mix exploration with learning, so the
+final agents were also evaluated frozen (`experiments/eval_pong.py`): 1,000
+points per seed, no weight updates. Seeds used: 10 dopamine (trace 0.9, 700K
+steps), 6 hybrid (2M steps; seeds 6 and 7 were started and deliberately
+stopped to free CPU, so they are excluded), 10 random.
+
+| Agent | Seeds | Mean +/- SD across seeds | Per-seed rates (%) |
+|---|---|---|---|
+| Random play | 10 | **3.10 +/- 0.58%** | 3.6, 3.2, 2.8, 3.2, 3.2, 2.8, 3.4, 2.3, 2.3, 4.2 |
+| Dopamine, sampled from policy | 10 | 2.81 +/- 1.03% | 3.6, 0.8, 3.1, 3.4, 3.5, 1.1, 3.4, 3.2, 3.5, 2.5 |
+| Dopamine, greedy (argmax) | 10 | 0.00 +/- 0.00% | all 0.0 |
+| Hybrid Q-head, greedy | 6 | 2.83 +/- 3.23% | 0.0, 7.0, 0.0, 5.8, 4.2, 0.0 |
+
+Tests against random (Welch t / Mann-Whitney):
+
+- Dopamine sampled: t = -0.77, p = 0.45 (MWU 0.97). Not different from random.
+- Hybrid greedy: t = -0.20, p = 0.85 (MWU 1.0). Not different from random.
+- Dopamine greedy: t = -16.9, p = 4e-8. Significantly *worse* than random.
+
+**Reading this honestly**
+
+- **No arm beats random play.** The earlier training-time figures (2-3%)
+  looked like learning only because no random baseline had been measured.
+- **The greedy dopamine policy is degenerate.** Taking the single best action
+  every step scores exactly zero on every seed, which suggests it settles
+  on one action (a stuck paddle never intercepts). Its sampled version
+  recovers random-level scores because the sampling restores movement.
+  That means the "score" of the sampled policy is mostly the randomness
+  itself.
+- **The hybrid is bimodal, not better.** Three seeds exceed random (4.2,
+  5.8, 7.0%) and three collapse to 0%. Across seeds this is statistically
+  indistinguishable from random, and it matches the training logs, where two
+  seeds decayed from 3-4% to about 0.4% as exploration dropped.
+- **Likely cause: features and readout, not the training rule.** Swapping
+  the dopamine rule for replay-based Q-learning changed variance, not mean
+  performance. The fixed random projection of raw RAM bytes does not expose
+  the relation the task needs (ball height minus paddle height), and a
+  single linear layer cannot build it. Untested next steps: an encoder that
+  preserves that relation, a deeper head, and real mushroom-body structure
+  from FlyWire instead of the synthetic circuit.
+- **Caveats:** a point counts as scored when the agent wins it; every arm uses
+  the same metric and environment. Results cover one hyperparameter setting
+  per arm and no tuning of the hybrid, so they do not show that these
+  approaches cannot work, only that they did not here.
 
 ## Live local demo (not a precomputed replay)
 

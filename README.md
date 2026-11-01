@@ -3,7 +3,8 @@
 ![Real-wiring fly circuit playing ViZDoom](docs/marksman_demo.gif)
 
 *The real FlyWire LC10a -> AOTU -> DNa02 circuit (3,963 LIF neurons, no
-training) turning toward and shooting enemies in ViZDoom. Right panel: live
+training) turning toward and shooting enemies in ViZDoom (one episode, 7
+kills; the average over 20 held-out episodes is 8.0). Right panel: live
 firing rates of the readout neuron groups. See `docs/MARKSMAN.md`.*
 
 
@@ -24,6 +25,20 @@ simplifications made, and the milestones. Short version:
 - Everything else (photoreceptors → optic lobe → descending neurons) is
   used as a fixed, non-plastic feature extractor / motor decoder, in line
   with what's actually known about those circuits.
+
+## Results at a glance
+
+| Experiment | Result | Verdict |
+|---|---|---|
+| Simulator validation | Reproduces the published sugar -> MN9 feeding result on the full 138,639-neuron connectome | Validated |
+| Fly Marksman (untrained real wiring, ViZDoom) | Held-out, 20 episodes: **8.0 +/- 5.2 kills** vs 0.0 scrambled wiring, 1.05 random, 12.4 oracle (fly vs scrambled p = 1.5e-6, vs random p = 9e-6) | Wiring matters; reproduces the published direction |
+| Pong, dopamine rule (10 seeds) | 2.8% sampled, 0.0% greedy, vs 3.1% for random play | No learning shown |
+| Pong, hybrid fixed encoding + Q-head (6 seeds) | 2.8 +/- 3.2% (bimodal), vs 3.1% random | No learning shown |
+
+Details and caveats: `docs/MARKSMAN.md` (including a drive-strength sweep
+where an untuned parameter first hid the effect) and `docs/PONG.md`.
+Pong uses a synthetic 242-neuron circuit; Marksman uses real FlyWire wiring
+(3,963 neurons) with engineered vision input and no learning.
 
 ## Project layout
 
@@ -161,9 +176,8 @@ same visualization to show the game itself is solvable. See
 
 ## Pong: real Atari, native interface, live
 > **Note:** the Pong agents use a synthetic 242-neuron toy circuit, not
-> FlyWire data, and a random-play baseline (3.7%) scores above both trained
-> agents (about 2.4%). See the corrections at the top of `docs/PONG.md`.
-
+> FlyWire data, and neither beats random play (frozen evaluation: random
+> 3.1%, dopamine 2.8%, hybrid 2.8%). See `docs/PONG.md`.
 
 The real game, downloaded for real, played through its own unmodified
 interface — no hand-crafted features, no remapped actions, no reshaped
