@@ -121,6 +121,15 @@ real circuit and against scrambled rewirings (a different rewiring each episode)
 | 10 mV | 1.7 +/- 2.0 | 0.3 +/- 0.5 |
 | 15 mV | 2.9 +/- 1.9 | 0.2 +/- 0.6 |
 | 25 mV | 7.1 +/- 4.4 | 0.0 +/- 0.0 |
+| 35 mV | 9.7 +/- 4.2 | 0.0 +/- 0.0 |
+| 50 mV | 8.5 +/- 3.7 | 0.0 +/- 0.0 |
+
+**35 mV, held-out** (seed 1000, 20 episodes, same protocol as the main
+table): fly **9.05 +/- 4.95** (median 10, range 1-16), scrambled 0.0 +/- 0.0
+(fly vs scrambled p = 1.2e-7, vs random p = 6.6e-7). That is closer to the
+published 10.2, but not significantly better than 25 mV's 8.0 (Welch
+p = 0.52). The main table and all controls stay at 25 mV so they share one
+setting.
 
 Caveats:
 
@@ -128,8 +137,9 @@ Caveats:
   seeds, so its 7.1 is optimistic. The held-out seeds (above) are the fair
   estimate. They came out similar (8.0), so the choice does not look like
   an overfit to the tuning seeds.
-- **Top of the range tried.** 25 mV was the largest value swept. Performance
-  was still rising, so a higher drive could do better. Not tested.
+- **Drive saturates above about 35 mV.** The 35 and 50 mV calibration curves
+  are almost identical (same thresholds to within 0.2), so going higher
+  changes little. 35 vs 50 mV on the tuning seeds is within episode noise.
 - **The weaker drive misled the first result.** With the original 6 mV
   setting (20 episodes, seed 0) the fly scored 1.55 +/- 1.32, not
   significantly better than random (1.10 +/- 0.64, p = 0.18), although it

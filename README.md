@@ -38,7 +38,7 @@ simplifications made, and the milestones. Short version:
 | Experiment | Result | Verdict |
 |---|---|---|
 | Simulator validation | Reproduces the published sugar -> MN9 feeding result on the full 138,639-neuron connectome | Validated |
-| Fly Marksman (untrained real wiring, ViZDoom) | Held-out, 20 episodes: **8.0 +/- 5.2 kills** vs 0.0 scrambled wiring, 1.0 recalibrated scramble, 1.05 random, 12.4 oracle (fly vs scrambled p = 1.5e-6, vs random p = 9e-6). Silencing AOTU019+025: 0.0; AOTU025 alone: 7.85 (no effect) | Wiring matters; reproduces the published direction |
+| Fly Marksman (untrained real wiring, ViZDoom) | Held-out, 20 episodes: **8.0 +/- 5.2 kills** vs 0.0 scrambled wiring, 1.0 recalibrated scramble, 1.05 random, 12.4 oracle (fly vs scrambled p = 1.5e-6, vs random p = 9e-6). Silencing AOTU019+025: 0.0; AOTU025 alone: 7.85 (no effect). At 35 mV drive: 9.05 held-out (not significantly above 8.0) | Wiring matters; reproduces the published direction |
 | Pong, dopamine rule (10 seeds) | 2.8% sampled, 0.0% greedy, vs 3.1% for random play | No learning shown |
 | Pong, hybrid fixed encoding + Q-head (6 seeds) | 2.8 +/- 3.2% (bimodal), vs 3.1% random | No learning shown |
 
