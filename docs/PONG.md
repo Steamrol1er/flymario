@@ -23,6 +23,13 @@ result is. Code lives in `env/pong_env.py`, `experiments/train_pong.py`,
 >    policy scores exactly 0.0% on all 10 seeds. See "Evaluation-only
 >    results" below.
 
+> 3. **The ball and enemy-paddle RAM labels were wrong until the DQN work.**
+>    Bytes 49, 50 and 54 were rotated in `env/pong_env.py`. See "Encoder and
+>    head comparison" below for what this did and did not affect.
+> 4. **"Features are the bottleneck" is not supported.** Earlier sections
+>    suggest it. The direct test (hand-engineered features) did not beat random
+>    or the other arms, so see that section instead.
+
 ## Why Pong
 
 Pong is a real-time motion-tracking task: track a moving object, move a
@@ -127,14 +134,15 @@ platformer, Pong's interface is used completely unmodified:
 | Actions | The game's own `Discrete(6)`: `NOOP, FIRE, RIGHT, LEFT, RIGHTFIRE, LEFTFIRE`. No remapping, no reduced action set. |
 | Reward | The game's own `+1` / `-1` / `0`. No reshaping (contrast with FlappyBird, where reshaping the reward was itself part of the problem). |
 
-Three RAM addresses (player paddle y, ball x, ball y, enemy paddle y) are
-read out **only** for the replay visualization, found empirically by
-moving the paddle and watching which bytes changed — not fed to the
-network, which sees all 128 bytes uniformly, and not taken from a
-published RAM map that might not match this exact `ale-py` build. See
-`env/pong_env.py`'s docstring for exactly how each address was confirmed
-(or, for the enemy paddle, only inferred by elimination — flagged as
-such).
+Four RAM addresses (player paddle y 51, ball x 49, ball y 54, enemy paddle y
+50) are read out for the replay and live displays only; the network-facing
+encoders see all bytes uniformly (the `rel` arm below is the one deliberate
+exception). **Correction:** these were originally labeled by watching which
+bytes changed, and three were wrong (ball y was read from 49, ball x from 50,
+enemy y from 54). The current values follow the AtariARI annotation; a check
+on random play found bytes 50 and 54 correlate at 0.99, as expected for a CPU
+paddle tracking the ball. That correlation cannot by itself say which of the
+two is the ball, so that assignment rests on AtariARI.
 
 ## Bugs found and fixed (applied proactively this time)
 
@@ -383,7 +391,7 @@ Per-seed last-10% rates: dopamine 0.9 = 2.3 / 1.9 / 3.5%; hybrid =
   agent held steady or improved. The early scores occur while epsilon is
   near 1 (mostly random actions), so they mostly reflect random play, and
   the decline looks like the Q-head degrading as exploration drops.
-- **So the training method is probably not the bottleneck.** Swapping the
+- **(Superseded: see "Encoder and head comparison".) So the training method is probably not the bottleneck.** Swapping the
   dopamine rule for backprop with replay and a target network did not help.
   The more likely limits are the features (a fixed random projection of
   raw RAM bytes, where the decision depends on a relation such as ball
@@ -428,7 +436,7 @@ Tests against random (Welch t / Mann-Whitney):
   5.8, 7.0%) and three collapse to 0%. Across seeds this is statistically
   indistinguishable from random, and it matches the training logs, where two
   seeds decayed from 3-4% to about 0.4% as exploration dropped.
-- **Likely cause: features and readout, not the training rule.** Swapping
+- **(Superseded: see "Encoder and head comparison".) Likely cause: features and readout, not the training rule.** Swapping
   the dopamine rule for replay-based Q-learning changed variance, not mean
   performance. The fixed random projection of raw RAM bytes does not expose
   the relation the task needs (ball height minus paddle height), and a
@@ -439,6 +447,85 @@ Tests against random (Welch t / Mann-Whitney):
   the same metric and environment. Results cover one hyperparameter setting
   per arm and no tuning of the hybrid, so they do not show that these
   approaches cannot work, only that they did not here.
+
+## Encoder and head comparison (DQN, 1M steps, 3 seeds per arm)
+
+`experiments/pong_dqn.py`, testing whether better features or a hidden layer
+get past random play. Greedy and eps-0.05 scores are over 1,000 frozen points
+per seed. "Late" averages the 200-point greedy checks at 500K, 750K and 1M
+steps. Random play is the 10-seed frozen result (3.10 +/- 0.58%).
+
+| Arm | Final greedy (%) | Per seed | Final eps 0.05 (%) | Late greedy (%) |
+|---|---|---|---|---|
+| Random-KC code, linear head | 6.73 +/- 3.26 | 3.0, 9.0, 8.2 | 6.03 +/- 2.06 | 4.94 +/- 4.63 |
+| Random-KC code, 128-unit hidden layer | 15.27 +/- 14.65 | 31.4, 11.6, 2.8 | 14.37 +/- 10.83 | 5.72 +/- 5.02 |
+| Raw RAM, 128-unit hidden layer | 3.07 +/- 4.55 | 8.3, 0.0, 0.9 | 6.00 +/- 7.86 | 7.06 +/- 12.08 |
+| Hand-engineered features, linear head | 0.00 +/- 0.00 | 0.0, 0.0, 0.0 | 0.00 +/- 0.00 | 0.00 +/- 0.00 |
+| Hand-engineered features, hidden layer | 5.20 +/- 4.81 | 9.5, 6.1, 0.0 | 6.50 +/- 5.73 | 6.89 +/- 5.09 |
+| Hand-coded tracker (no learning) | about 45 | 40 points only | | |
+
+Welch tests against random (two-sided, greedy / eps 0.05, not corrected for
+the number of tests):
+
+| Arm | p (greedy) | p (eps 0.05) |
+|---|---|---|
+| Random-KC, linear | 0.19 | 0.13 |
+| Random-KC, hidden layer | 0.29 | 0.21 |
+| Raw RAM, hidden layer | 0.99 | 0.59 |
+| Hand-engineered, hidden layer | 0.53 | 0.41 |
+| Hand-engineered, linear | below 0.001, *worse* than random | below 0.001, *worse* |
+
+Pairwise (greedy, Welch): KC hidden vs linear p = 0.42; hand-engineered hidden
+vs linear p = 0.20; hand-engineered vs KC (both hidden) p = 0.36; hand-engineered
+vs raw (both hidden) p = 0.61; KC vs raw (both hidden) p = 0.28.
+
+**What this supports**
+
+- **No arm reliably beats random across seeds.** With three seeds and this
+  much spread, the tests have little power, so this is "not shown", not
+  "shown equal".
+- **Individual seeds do learn something.** A 31.4% score over 1,000 points
+  (random-KC with a hidden layer, seed 0) is far above random for that seed.
+  A raw-RAM seed reached 53.5% at the 750K check but fell to 8.3% by the end. Policies appear and then degrade, and the same arm also produces
+  seeds that stay near 0%.
+- **Features are not the main bottleneck, at least not alone.** Hand-engineered
+  features contain everything a three-line tracker needs to win about 45%,
+  yet the DQN on them reached only 5.2% and did not beat the arms using raw
+  bytes or the random code. The instability of this DQN setup is at least as
+  much of a limit. This replaces the "features, not the learning rule" reading
+  in the earlier sections.
+- **The linear failure is not a representation limit.** Moving toward the ball
+  is expressible with a linear Q-function on these features, so the 0.0% on
+  all seeds is a training failure.
+- **Fixes to the agent are confounded.** The random-KC linear arm scores 6.7%
+  against 2.8% for the earlier hybrid, but `pong_dqn.py` changes several things
+  together (point end treated as terminal, Huber loss, gradient clipping,
+  replay eviction, 1M rather than 2M steps), and that difference was not
+  tested. No single change can be credited.
+
+**The RAM-label bug.** Bytes 49, 50 and 54 were rotated (see "Interface").
+Agents reading raw RAM, or the random-KC code built from it, were never
+affected. That covers every earlier dopamine and hybrid result. Displays and
+recorded traces were: `ball_x`, `ball_y` and `enemy_y` in anything produced
+before this fix are mislabeled. The hand-engineered arms were first run with
+the wrong bytes, then restarted with the correct ones; only the corrected runs
+are reported.
+
+**Limits of this comparison:** three seeds, one hyperparameter setting, no
+tuning. The 1,200-step point cap counts a very long rally as not won, which
+understates good policies. The tracker's 45% is from 40 points at the best of
+five offsets tried. `evaluate()` reseeds Python's `random` during training,
+which restarts the exploration stream at each check; it does not favor any arm
+but is not clean.
+
+**Real mushroom-body arms: still running.** `connectome/mushroom_body.py` builds
+the encoder from real FlyWire wiring: 5,177 Kenyon cells, 319 ALPNs, 27,848
+ALPN->KC edges, median 6 inputs per KC, about 5% of KCs active. A
+degree-preserving shuffle is the control. It uses a sparse multiply and a
+drive-dependent threshold (mean + 1.8 SD) instead of exact top-k, which was too
+slow to train. It needs `data/Supplemental_file1_neuron_annotations.tsv` from
+`flyconnectome/flywire_annotations`. Results will be added when those runs
+finish.
 
 ## Live local demo (not a precomputed replay)
 

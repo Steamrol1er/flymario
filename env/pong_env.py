@@ -41,9 +41,9 @@ ACTION_MEANINGS = ["NOOP", "FIRE", "RIGHT", "LEFT", "RIGHTFIRE", "LEFTFIRE"]
 N_ACTIONS = len(ACTION_MEANINGS)
 
 RAM_PLAYER_Y = 51   # confirmed: moves directly with our own actions
-RAM_BALL_Y = 49     # confirmed: reverses sign at wall bounces
-RAM_BALL_X = 50     # confirmed: moves across a full serve, reverses partway
-RAM_ENEMY_Y = 54    # inferred by elimination, not independently confirmed
+RAM_BALL_Y = 54     # ball y (AtariARI annotation; also corr 0.99 with RAM[50], the CPU paddle that tracks it)
+RAM_BALL_X = 49     # ball x (AtariARI annotation)
+RAM_ENEMY_Y = 50    # CPU paddle y. These three were previously mislabeled (49/50/54 rotated); fixed, see docs/PONG.md
 
 
 class PongEnv:
