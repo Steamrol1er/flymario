@@ -518,14 +518,59 @@ five offsets tried. `evaluate()` reseeds Python's `random` during training,
 which restarts the exploration stream at each check; it does not favor any arm
 but is not clean.
 
-**Real mushroom-body arms: still running.** `connectome/mushroom_body.py` builds
-the encoder from real FlyWire wiring: 5,177 Kenyon cells, 319 ALPNs, 27,848
-ALPN->KC edges, median 6 inputs per KC, about 5% of KCs active. A
-degree-preserving shuffle is the control. It uses a sparse multiply and a
-drive-dependent threshold (mean + 1.8 SD) instead of exact top-k, which was too
-slow to train. It needs `data/Supplemental_file1_neuron_annotations.tsv` from
-`flyconnectome/flywire_annotations`. Results will be added when those runs
-finish.
+### Real mushroom-body encoder vs. shuffled wiring (3 seeds per arm)
+
+`connectome/mushroom_body.py` builds the encoder from real FlyWire wiring: 5,177
+Kenyon cells, 319 ALPNs, 27,848 ALPN->KC edges, median 6 inputs per KC, about
+5% of KCs active. The control shuffles which KC each ALPN edge lands on,
+keeping every ALPN's out-degree, every KC's in-degree and every edge weight.
+Game input reaches the ALPNs through a fixed random projection, since Pong is
+not an odor. For speed, global inhibition is a drive-dependent threshold
+(mean + 1.8 SD per sample) rather than exact top-k; both arms use the same
+rule. It needs `data/Supplemental_file1_neuron_annotations.tsv` from
+`flyconnectome/flywire_annotations`. The hidden-layer runs were killed at
+about 700K steps by a PC reboot and rerun from zero; the rerun reproduced
+the earlier checkpoints exactly.
+
+| Arm | Final greedy (%) | Per seed | Final eps 0.05 (%) | Late greedy (%) |
+|---|---|---|---|---|
+| Real wiring, linear | 5.73 +/- 2.03 | 4.1, 5.1, 8.0 | 7.00 +/- 2.97 | 3.00 +/- 0.93 |
+| Shuffled wiring, linear | 0.90 +/- 0.82 | 1.1, 1.6, 0.0 | 2.13 +/- 1.63 | 1.22 +/- 0.92 |
+| Real wiring, hidden layer | 7.30 +/- 9.20 | 2.6, 17.9, 1.4 | 8.07 +/- 6.37 | 12.61 +/- 15.48 |
+| Shuffled wiring, hidden layer | 20.37 +/- 24.60 | 48.7, 8.0, 4.4 | 17.13 +/- 14.59 | 12.06 +/- 10.69 |
+
+Welch tests (two-sided, greedy / eps 0.05 / late, uncorrected):
+
+| Comparison | p |
+|---|---|
+| Real vs shuffled, linear | 0.039 / 0.086 / 0.078 |
+| Real vs shuffled, hidden layer | 0.46 / 0.40 / 0.96 |
+| Real wiring vs random-KC code, linear | 0.68 / 0.67 / 0.55 |
+| Real wiring vs random-KC code, hidden layer | 0.48 / 0.45 / 0.53 |
+| Real linear vs random play | 0.15 / 0.15 |
+| Real hidden layer vs random play | 0.51 / 0.31 |
+| Shuffled linear vs random play | 0.029 (worse) / 0.41 |
+| Shuffled hidden layer vs random play | 0.35 / 0.24 |
+
+**What this supports**
+
+- **No evidence that real mushroom-body wiring helps the agent.** With a
+  linear head, real wiring beat its shuffle on every seed (p = 0.039 greedy),
+  but that edge is not significant on the other two measures, and it
+  disappears with a hidden layer, where the shuffled arm scored higher on
+  average. Real wiring also did no better than the plain random-KC code
+  (p about 0.5-0.7 everywhere). The linear-head gap looks more like the
+  shuffle being a poor encoder for a linear readout than real wiring being a
+  good one.
+- **No arm reliably beats random play.** Individual seeds learn: one
+  shuffled-wiring seed reached 48.7% over 1,000 points, the best single agent
+  in the project and slightly above the 45% hand-coded tracker. Other seeds
+  in every arm stay near random.
+- **Caveats:** three seeds per arm gives little power, and with eight tests
+  above, one p near 0.04 is about what chance would produce. The encoder is a
+  static feed-forward pass, not spiking dynamics, and the game-to-ALPN mapping
+  is arbitrary, so this tests the KC sampling pattern only, not the mushroom
+  body's function.
 
 ## Live local demo (not a precomputed replay)
 

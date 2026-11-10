@@ -41,7 +41,8 @@ simplifications made, and the milestones. Short version:
 | Fly Marksman (untrained real wiring, ViZDoom) | Held-out, 20 episodes: **8.0 +/- 5.2 kills** vs 0.0 scrambled wiring, 1.0 recalibrated scramble, 1.05 random, 12.4 oracle (fly vs scrambled p = 1.5e-6, vs random p = 9e-6). Silencing AOTU019+025: 0.0; AOTU025 alone: 7.85 (no effect). At 35 mV drive: 9.05 held-out (not significantly above 8.0) | Wiring matters; reproduces the published direction |
 | Pong, dopamine rule (10 seeds) | 2.8% sampled, 0.0% greedy, vs 3.1% for random play | No learning shown |
 | Pong, hybrid fixed encoding + Q-head (6 seeds) | 2.8 +/- 3.2% (bimodal), vs 3.1% random | No learning shown |
-| Pong, DQN encoder/head comparison (5 arms, 3 seeds each) | Best arm 15.3 +/- 14.7% (random-KC, hidden layer; one seed 31%); no arm reliably above random 3.1%; a hand-coded tracker wins about 45% | Some seeds learn; not reliable. Real mushroom-body arms still running |
+| Pong, DQN encoder/head comparison (5 arms, 3 seeds each) | Best arm 15.3 +/- 14.7% (random-KC, hidden layer; one seed 31%); no arm reliably above random 3.1%; a hand-coded tracker wins about 45% | Some seeds learn; not reliable |
+| Pong, real FlyWire mushroom-body encoder vs shuffled wiring (3 seeds each) | Linear: real 5.7% vs shuffled 0.9% (p = 0.04, not robust). Hidden layer: real 7.3% vs shuffled 20.4% (one shuffled seed 48.7%). Real wiring no better than a random projection | No evidence real wiring helps |
 
 Details and caveats: `docs/MARKSMAN.md` (including a drive-strength sweep
 where an untuned parameter first hid the effect) and `docs/PONG.md`.
